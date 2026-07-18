@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         iDesk Auto-Fill Helper
 // @namespace    http://inet.vn/
-// @version      1.0
+// @version      1.1
 // @description  Hệ thống tự động hóa xử lý văn bản đến trên iDesk sử dụng AI
 // @author       Senior Developer
 // @match        https://vpdt.gialai.gov.vn/cumphumy/smartcloud/idesk6/page/paperwork/index.cpx*
@@ -9,6 +9,19 @@
 // @grant        unsafeWindow
 // @run-at       document-end
 // ==/UserScript==
+
+// CHANGELOG v1.1 (đối chiếu với resource/*.html thật do người dùng cung cấp):
+// - Fix: chọn "Sổ văn bản đến" luôn throw lỗi vì ID container do Select2 tự sinh
+//   có ký tự "\" thật chèn trước dấu "-" (bug của bản Select2 đang chạy trên trang này).
+//   -> Chuyển sang lấy container qua input gốc ổn định #edocs-txt-book (previousElementSibling).
+// - Fix: scanList() ra 0 kết quả do race-condition (SPA load AJAX chưa xong) -> thêm retry
+//   + lọc theo visibility (offsetParent) để không lẫn dữ liệu từ widget khác đang ẩn.
+// - Thêm: MutationObserver tự quét lại danh sách khi DOM đổi, khỏi cần bấm tay.
+// - Fix: kéo popup bị giật/đứng khi rê qua iframe (khung xem PDF đính kèm) do dùng
+//   mousemove trên document -> chuyển sang Pointer Events + setPointerCapture.
+// - Fix: bug tiềm ẩn khi bind thẳng hàm nhận tham số vào addEventListener('click', ...).
+// - Cải thiện: "Hạn xử lý" set số ngày trước rồi ép lại đúng ngày theo công thức
+//   hiện tại + N ngày, tránh lệch nếu iDesk tự tính theo quy tắc khác.
 
 (function() {
     'use strict';
@@ -29,20 +42,27 @@
 
     // DOM Selectors
     const SELECTORS = {
+        // Chọn theo ID cụ thể trước (nhanh hơn), fallback sang class chung + lọc visible
+        // nếu ID bị trùng lặp giữa nhiều widget (Xử lý chính, Cho ý kiến... cùng preload trong DOM).
         LEFT_PANEL_ITEMS: '#listview-list-content div.messageListItem',
+        LEFT_PANEL_ITEMS_FALLBACK: 'div.messageListItem[data-id]',
         RIGHT_PANEL_CONTAINER: '#ed-new-receiver-document-widget',
         
         // Right Panel Fields
         SUBJECT: '#edocs-txt-subject',
         SIGN_NUMBER: '#edocs-txt-sign-number',
         DOC_DATE: '#edocs-txt-doc-date-str',
-        CATEGORY: '#select2-chosen-1',
         AGENCY: '#edocs-txt-agency',
         SIGNER: '#edocs-txt-signer',
         SHOW_MORE_BTN: '#edocs-btn-hide-show-more-info',
-        
-        // Book Selectors
-        BOOK_SELECT2_CONTAINER: '#s2id_edocs-txt-book',
+
+        // KHÔNG dùng ID auto-gen của Select2 (dạng #s2id_edocs-txt-book) vì phiên bản Select2
+        // đang chạy trên trang này chèn ký tự "\" thật vào trước mỗi dấu "-" trong id container
+        // (đã kiểm chứng bằng byte thô từ right_panel.html): id thật là "s2id_edocs\-txt\-book".
+        // CSS selector "#s2id_edocs-txt-book" (không có \) sẽ KHÔNG BAO GIỜ match được.
+        // => Thay vào đó lấy qua input gốc ổn định, không đổi theo phiên bản Select2.
+        BOOK_ORIGINAL_INPUT: '#edocs-txt-book',
+        CATEGORY_ORIGINAL_INPUT: '#edocs-txt-category',
         SAVE_TRANSFER_BTN: '#ed-new-receiver-btn-save-transfer',
         
         // Transfer Screen Selectors (Right panel after save & transfer)
@@ -61,6 +81,25 @@
 
     // Helper sleep function
     const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+    // Lấy container Select2 (.select2-container) dựa trên ID của input/select GỐC (ổn định),
+    // thay vì dựa vào ID "s2id_..." mà Select2 tự sinh (đã xác nhận bị lỗi escape \- trên trang này).
+    // Select2 3.x luôn chèn .select2-container làm anh/em (sibling) ngay sát input gốc,
+    // nhưng thứ tự trước/sau có thể khác nhau tùy field nên ta thử cả 2 hướng cho chắc.
+    const getSelect2ContainerByFieldId = (originalFieldId) => {
+        const hiddenEl = document.querySelector(originalFieldId);
+        if (!hiddenEl) return null;
+
+        const prev = hiddenEl.previousElementSibling;
+        if (prev && prev.classList.contains('select2-container')) return prev;
+
+        const next = hiddenEl.nextElementSibling;
+        if (next && next.classList.contains('select2-container')) return next;
+
+        // Fallback cuối: leo lên parent gần nhất rồi tìm .select2-container bên trong
+        const parent = hiddenEl.closest('.row-fluid, .span4, .span3, div');
+        return parent ? parent.querySelector('.select2-container') : null;
+    };
 
     // 2. NETWORK INTERCEPTOR (AJAX)
     // Intercept iDesk AJAX calls to capture document metadata & IDs automatically
@@ -226,8 +265,8 @@
 
     // Select register in Select2
     const selectBookDropdown = async (bookName) => {
-        const select2Container = document.querySelector(SELECTORS.BOOK_SELECT2_CONTAINER);
-        if (!select2Container) throw new Error("Không tìm thấy Sổ văn bản đến!");
+        const select2Container = getSelect2ContainerByFieldId(SELECTORS.BOOK_ORIGINAL_INPUT);
+        if (!select2Container) throw new Error("Không tìm thấy Sổ văn bản đến! (container Select2 không xác định được qua #edocs-txt-book, kiểm tra lại DOM)");
         
         const trigger = select2Container.querySelector('.select2-choice');
         if (!trigger) throw new Error("Không tìm thấy nút bấm chọn Sổ văn bản!");
@@ -236,17 +275,22 @@
         trigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
         await sleep(CONFIG.DELAY_MS.OPEN_SELECT2);
         
-        // Find dropdown options
+        // Find dropdown options - ưu tiên khớp chính xác trước, tránh chọn nhầm khi
+        // nhiều tên sổ chứa chung tiền tố (VD "Sổ văn bản đến" vs "Sổ văn bản đến Trung ương")
         const results = document.querySelectorAll('#select2-drop ul.select2-results li');
-        let selected = false;
+        let target = null;
         for (const li of results) {
-            if (li.textContent.trim().includes(bookName)) {
-                li.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
-                selected = true;
-                break;
+            if (li.textContent.trim() === bookName) { target = li; break; }
+        }
+        if (!target) {
+            for (const li of results) {
+                if (li.textContent.trim().includes(bookName)) { target = li; break; }
             }
         }
-        if (!selected) {
+
+        if (target) {
+            target.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+        } else {
             // Close dropdown if option not found
             document.body.click();
             throw new Error(`Không tìm thấy sổ '${bookName}' trong dropdown!`);
@@ -352,23 +396,34 @@
             }
         }
 
-        // 6. Fill Hạn xử lý
+        // 6. Fill Hạn xử lý = ngày hiện tại + số ngày (thời hạn thực hiện)
         if (aiData.thoi_han_thuc_hien) {
             const deadlineDays = parseInt(aiData.thoi_han_thuc_hien);
             const deadlineDate = calculateDeadlineDate(deadlineDays);
-            
-            const deadlineInput = document.querySelector(SELECTORS.DEADLINE_INPUT);
-            if (deadlineInput) {
-                deadlineInput.value = deadlineDate;
-                deadlineInput.dispatchEvent(new Event('change', { bubbles: true }));
-                deadlineInput.dispatchEvent(new Event('blur', { bubbles: true }));
-            }
-            
+
+            // Set số ngày TRƯỚC để kích hoạt logic tính toán/validate gốc của iDesk (nếu có)
             const deadlineNumInput = document.querySelector(SELECTORS.DEADLINE_NUMBER_INPUT);
             if (deadlineNumInput) {
                 deadlineNumInput.value = deadlineDays;
+                deadlineNumInput.dispatchEvent(new Event('input', { bubbles: true }));
                 deadlineNumInput.dispatchEvent(new Event('change', { bubbles: true }));
                 deadlineNumInput.dispatchEvent(new Event('blur', { bubbles: true }));
+                await sleep(300); // chờ iDesk tự tính (nếu có binding riêng)
+            }
+
+            // Sau đó ÉP LẠI ngày hiển thị đúng công thức "hiện tại + N ngày" mà bạn yêu cầu,
+            // để không phụ thuộc vào việc iDesk có tự tính đúng quy tắc này hay không
+            // (VD: iDesk có thể loại trừ thứ 7/CN, tính theo ngày văn bản thay vì hôm nay, v.v.)
+            const deadlineInput = document.querySelector(SELECTORS.DEADLINE_INPUT);
+            if (deadlineInput) {
+                deadlineInput.value = deadlineDate;
+                deadlineInput.dispatchEvent(new Event('input', { bubbles: true }));
+                deadlineInput.dispatchEvent(new Event('change', { bubbles: true }));
+                deadlineInput.dispatchEvent(new Event('blur', { bubbles: true }));
+
+                if (deadlineInput.value !== deadlineDate) {
+                    console.warn(`[iDesk RPA] Hạn xử lý không set được đúng giá trị mong muốn. Muốn: ${deadlineDate}, thực tế: ${deadlineInput.value}`);
+                }
             }
         }
 
@@ -713,7 +768,7 @@
             document.getElementById('rpa-btn-minimize').textContent = container.classList.contains('minimized') ? '🗖' : '➖';
         });
 
-        document.getElementById('rpa-btn-scan').addEventListener('click', scanList);
+        document.getElementById('rpa-btn-scan').addEventListener('click', () => scanList());
         document.getElementById('rpa-btn-ai-all').addEventListener('click', runAIOnAllSelected);
         document.getElementById('rpa-btn-fill-all').addEventListener('click', runFillOnAllSelected);
         document.getElementById('rpa-th-check-all').addEventListener('change', (e) => {
@@ -736,14 +791,36 @@
         if (el) el.textContent = msg;
     };
 
-    // Scrape documents from left list panel DOM
-    const scanList = () => {
-        setStatus("Đang quét danh sách văn bản...");
-        const items = document.querySelectorAll(SELECTORS.LEFT_PANEL_ITEMS);
-        
+    // Lấy danh sách item đang thực sự hiển thị trên màn hình (loại bỏ item từ các
+    // widget khác đang bị ẩn display:none nhưng vẫn còn trong DOM do iDesk cache lại).
+    // offsetParent === null nghĩa là phần tử (hoặc cha của nó) đang display:none.
+    const queryVisibleListItems = () => {
+        // Ưu tiên selector cụ thể trước (đúng ngữ cảnh hơn), fallback sang class chung toàn trang
+        let items = Array.from(document.querySelectorAll(SELECTORS.LEFT_PANEL_ITEMS));
         if (items.length === 0) {
-            setStatus("Không tìm thấy văn bản nào ở panel trái. Hãy load lại trang!");
-            return;
+            items = Array.from(document.querySelectorAll(SELECTORS.LEFT_PANEL_ITEMS_FALLBACK));
+        }
+        return items.filter(el => el.offsetParent !== null);
+    };
+
+    // Scrape documents from left list panel DOM.
+    // Có retry vì list được nạp bằng AJAX (qrreceiving.cpx) - nếu gọi quá sớm lúc SPA
+    // chưa kịp render xong (chuyển tab, mới load trang...) sẽ ra 0 kết quả.
+    const scanList = async (retries = 3) => {
+        setStatus("Đang quét danh sách văn bản...");
+        let items = queryVisibleListItems();
+
+        let attempt = 0;
+        while (items.length === 0 && attempt < retries) {
+            attempt++;
+            setStatus(`Chưa thấy văn bản, thử lại lần ${attempt}/${retries}...`);
+            await sleep(800);
+            items = queryVisibleListItems();
+        }
+
+        if (items.length === 0) {
+            setStatus("Không tìm thấy văn bản nào ở panel trái. Hãy chắc chắn đang ở màn hình 'Tiếp nhận văn bản' rồi thử lại!");
+            return 0;
         }
 
         items.forEach(el => {
@@ -763,9 +840,24 @@
                 }
             }
         });
-        
+
         updateDashboardTable();
         setStatus(`Đã quét xong. Tìm thấy ${docCache.size} văn bản.`);
+        return items.length;
+    };
+
+    // Tự động quét lại mỗi khi nội dung panel trái thay đổi (đổi tab Tất cả/Nhận trong
+    // ngày/Chưa vào sổ, phân trang, nạp thêm dữ liệu...) thay vì phải bấm tay liên tục.
+    let scanDebounceTimer = null;
+    const observeListChanges = () => {
+        const debouncedScan = () => {
+            clearTimeout(scanDebounceTimer);
+            scanDebounceTimer = setTimeout(() => scanList(1), 600);
+        };
+
+        const observer = new MutationObserver(debouncedScan);
+        observer.observe(document.body, { childList: true, subtree: true });
+        return observer;
     };
 
     // Repopulate UI Table with cached documents
@@ -951,45 +1043,68 @@
         setStatus("Chu trình điền tự động kết thúc.");
     };
 
-    // Drag helper for floating dashboard panel
+    // Drag helper for floating dashboard panel.
+    // Dùng Pointer Events + setPointerCapture thay vì mousedown/mousemove trên document:
+    // trang iDesk có nhúng iframe (khung xem PDF file đính kèm, các dropdown/select2...),
+    // nếu chỉ nghe mousemove trên document thì khi con trỏ rê ngang qua iframe, sự kiện
+    // sẽ bị "nuốt" bởi document riêng của iframe đó, làm việc kéo bị đứng/giật rất khó chịu.
+    // setPointerCapture đảm bảo MỌI sự kiện con trỏ tiếp theo được gửi thẳng về header
+    // bất kể đang đè lên phần tử/iframe nào, tới khi pointerup.
     const dragElement = (elmnt) => {
-        let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
-        const header = elmnt.querySelector('.rpa-header');
-        
-        if (header) {
-            header.onmousedown = dragMouseDown;
-        } else {
-            elmnt.onmousedown = dragMouseDown;
-        }
+        const header = elmnt.querySelector('.rpa-header') || elmnt;
+        let startX = 0, startY = 0, startTop = 0, startLeft = 0, dragging = false;
 
-        function dragMouseDown(e) {
-            e = e || window.event;
-            // Only allow dragging on left click, not actions button
-            if (e.target.tagName === 'BUTTON') return;
-            e.preventDefault();
-            pos3 = e.clientX;
-            pos4 = e.clientY;
-            document.onmouseup = closeDragElement;
-            document.onmousemove = elementDrag;
-        }
+        header.style.touchAction = 'none'; // tránh cuộn trang trên trackpad/touch khi đang kéo
 
-        function elementDrag(e) {
-            e = e || window.event;
-            e.preventDefault();
-            pos1 = pos3 - e.clientX;
-            pos2 = pos4 - e.clientY;
-            pos3 = e.clientX;
-            pos4 = e.clientY;
-            elmnt.style.top = (elmnt.offsetTop - pos2) + "px";
-            elmnt.style.left = (elmnt.offsetLeft - pos1) + "px";
+        header.addEventListener('pointerdown', (e) => {
+            // Chỉ kéo bằng chuột trái, và không kéo khi bấm đúng vào nút bên trong header
+            if (e.button !== 0 || e.target.closest('button')) return;
+
+            dragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            const rect = elmnt.getBoundingClientRect();
+            startTop = rect.top;
+            startLeft = rect.left;
+
+            // Chốt vị trí hiện tại bằng top/left rồi bỏ neo bottom/right,
+            // để tính toán khi kéo không bị lệch do đổi hệ quy chiếu giữa chừng.
+            elmnt.style.top = startTop + 'px';
+            elmnt.style.left = startLeft + 'px';
             elmnt.style.bottom = 'auto';
             elmnt.style.right = 'auto';
-        }
 
-        function closeDragElement() {
-            document.onmouseup = null;
-            document.onmousemove = null;
-        }
+            header.setPointerCapture(e.pointerId);
+            header.style.cursor = 'grabbing';
+            document.body.style.userSelect = 'none'; // tránh bôi đen chữ khi rê nhanh
+            e.preventDefault();
+        });
+
+        header.addEventListener('pointermove', (e) => {
+            if (!dragging) return;
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+
+            // Giới hạn không cho kéo panel ra hẳn ngoài màn hình
+            const maxLeft = window.innerWidth - 60;
+            const maxTop = window.innerHeight - 40;
+            const newLeft = Math.min(Math.max(startLeft + dx, -elmnt.offsetWidth + 60), maxLeft);
+            const newTop = Math.min(Math.max(startTop + dy, 0), maxTop);
+
+            elmnt.style.left = newLeft + 'px';
+            elmnt.style.top = newTop + 'px';
+        });
+
+        const stopDrag = (e) => {
+            if (!dragging) return;
+            dragging = false;
+            header.style.cursor = 'grab';
+            document.body.style.userSelect = '';
+            try { header.releasePointerCapture(e.pointerId); } catch (err) {}
+        };
+
+        header.addEventListener('pointerup', stopDrag);
+        header.addEventListener('pointercancel', stopDrag);
     };
 
     // 5. INITIALIZATION
@@ -1001,8 +1116,10 @@
         // Wait for body to render then inject UI
         setTimeout(() => {
             createDashboardUI();
-            // Automatically scan list on initial load
+            // Automatically scan list on initial load (có retry sẵn bên trong)
             scanList();
+            // Từ giờ tự quét lại mỗi khi danh sách đổi, khỏi cần bấm tay
+            observeListChanges();
         }, 1500);
     };
 
