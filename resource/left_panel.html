@@ -1,0 +1,208 @@
+<div id="received-document-widget" class="listWidget ui-resizable">
+    <div class="listToolbar">
+        <button class="btn btn-primary" id="ed-received-doc-list-btn-create" data-action="create" title="Tạo văn bản">
+            <i class="icon-plus"></i> Tạo văn bản
+        </button>
+        <button class="btn btn-success hide" id="ed-received-doc-list-btn-export" data-action="create" title="Kết xuất" disabled="disabled" style="display: none !important;">
+            <i class="icon-download-alt"></i> Kết xuất
+        </button>
+        <span id="ed-received-doc-list-btn-workflow" class="hide"></span>
+        <button class="btn btn-primary hide" disabled="disabled" id="ed-received-doc-list-btn-transfer" title="Chuyển xử lý" style="display: none !important;">
+            <i class="icon-share-alt"></i> Chuyển
+        </button>
+        <div class="btn-group">
+            <button id="ed-received-doc-list-btn-action" type="button" class="btn btn-default dropdown-toggle hide" data-toggle="dropdown" disabled="disabled" style="display: none !important;">
+                <i class="icon-align-justify"></i> <span class="caret"></span>
+            </button>
+            <ul class="dropdown-menu" role="menu">
+                <li><a id="ed-received-doc-list-btn-copy" class="hide" href="javascript:;" disabled="disabled" style="display: none !important;"><i class="icon-copy"></i> Sao chép</a></li>
+                <li><a id="ed-received-doc-list-action-store" class="hide" href="javascript:;" disabled="disabled" style="display: none !important;"><i class="icon-hdd"></i> Cất văn bản</a></li>
+                <li class="divider"></li>
+                <li><a id="ed-received-doc-list-action-mark-read" class="hide" href="javascript:;" disabled="disabled" style="display: none !important;"><i class="icon-eye-open"></i> Đánh dấu là đã đọc</a></li>
+                <li><a id="ed-received-doc-list-action-mark-unread" class="hide" href="javascript:;" disabled="disabled" style="display: none !important;"><i class="icon-eye-close"></i> Đánh dấu là chưa đọc</a></li>
+                <li><a id="ed-received-doc-list-btn-delete" class="hide" href="javascript:;" disabled="disabled" style="display: none !important;"><i class="icon-trash red"></i> Xóa văn bản</a></li>
+            </ul>
+        </div>
+    </div>
+    <div id="listview" class="messageList" style="height: 864px;"><div class="b-message-list-wrapper"><div id="listview-toolbar" class="second-toolbar thm-message-list-top-toolbar" style="padding-right: 2px;white-space:normal"><span style="display: inline-block;float: left;"><label><input id="listview-check-all" type="checkbox" class="ace"><span class="lbl"></span></label></span><div id="received-basic-search">
+        <span class="listview-toolbar input-icon input-icon-right">
+            <select id="received-basic-search-txt-type" style="margin-top: -7px;width: 110px;">
+                <option value="" selected="selected">Tất cả</option>
+                <option data-type="situation" value="returning">Văn bản trả lại</option>
+                <option data-type="situation" value="retrieving">Văn bản thu hồi</option>
+                <option data-type="communication" value="false">Văn bản nhập</option>
+                <option data-type="communication" value="true">Văn bản nhận qua mạng</option>
+                <option value="priority_express">Văn bản hỏa tốc</option>
+                <option value="create">Chưa chuyển xử lý</option>
+            </select>
+            <input id="received-basic-search-txt-keyword" onclick="this.select();" type="text" placeholder="Từ khóa tìm kiếm" style="width: 278px;">
+            <i data-action-search="expand" class="icon-caret-down" title="Tìm kiếm nâng cao" style="right: 55px;cursor: pointer"></i>
+            <i data-action-search="search" class="icon-search" title="Tìm kiếm" style="right: 35px;cursor: pointer"></i>
+            <span dropdown-sort="" class="btn-group" style="margin-top: -7px;"><button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown"><i class="icon-sort-by-alphabet"></i></button><ul class="dropdown-menu" role="menu"><li class="active" data-field-sort="_default"><a href="javascript:;" style="padding-left: 20px;"><i style="position: absolute;margin: 2px -10px;"></i> Mặc định</a></li><li class="" data-field-sort="serialNumber"><a href="javascript:;" style="padding-left: 20px;"><i style="position: absolute;margin: 2px -10px;"></i> Số đến</a></li><li class="" data-field-sort="signNumber"><a href="javascript:;" style="padding-left: 20px;"><i style="position: absolute;margin: 2px -10px;"></i> Số ký hiệu văn bản</a></li><li class="" data-field-sort="docDate"><a href="javascript:;" style="padding-left: 20px;"><i style="position: absolute;margin: 2px -10px;"></i> Ngày văn bản</a></li><li class="" data-field-sort="category"><a href="javascript:;" style="padding-left: 20px;"><i style="position: absolute;margin: 2px -10px;"></i> Loại văn bản</a></li><li class="" data-field-sort="author"><a href="javascript:;" style="padding-left: 20px;"><i style="position: absolute;margin: 2px -10px;"></i> Cơ quan ban hành</a></li><li class="" data-field-sort="subject"><a href="javascript:;" style="padding-left: 20px;"><i style="position: absolute;margin: 2px -10px;"></i> Trích yếu</a></li><li class="" data-field-sort="deadline"><a href="javascript:;" style="padding-left: 20px;"><i style="position: absolute;margin: 2px -10px;"></i> Hạn xử lý</a></li></ul></span>
+        </span>
+        <div id="received-filter-date-ranger"><div style="margin-left: 20px">Ngày nhận từ <a href="javascript:;" class="editable-click" data-field="fromDate" data-original-title="" title="">18/04/2026</a> đến <a href="javascript:;" class="editable-click" data-field="toDate" data-original-title="" title="">18/07/2026</a></div></div>
+    </div></div><div class="mainDelimiter toolbarDelimiter"></div><div id="listview-list-container" class="b-content" style="height: 739px;"><div id="listview-no-data" style="text-align: center; font-size: 14px; line-height: 30px; padding: 10px; color: rgb(153, 153, 153); display: none;"><div>Không có dữ liệu để hiển thị</div></div><div id="listview-list-content" style="overflow: auto; position: relative; height: 739px;" tabindex="0"><div id="listview-list-view" class="content-wrapper" tabindex="-1"><div data-id="5007903" class="messageListItem read create selected focused" data-status="create"><div class="sidebarParent">&nbsp;</div><div class="delimiter"></div><div class="wrapper"><div class="flagParent"><span><i class="icon-star-empty" title="Bình thường"></i></span></div><div class="dateParent actionHandle dragHandle"><span title="18/07/2026">18/07/2026</span></div><div class="checkedParent"><label><input type="checkbox" class="ace" value="5007903"><span class="lbl"></span></label></div><div class="senderParent"><span class="threadsCountParent fullThreadHandle lastSelected" style="display: none;"><span class="threadsCount"></span><i class="icon-spinner animated" style="display: none;"></i></span><span class="internalTransfer"><i class="icon-share-sign blue" title="Đã chuyển nội bộ"></i>&nbsp;</span><span class="externalTransfer"><i class="icon-external-link-sign" title="Đã chuyển liên thông"></i>&nbsp;</span><span class="bookFlag"><i class="icon-book" title="Đã vào sổ"></i>&nbsp;</span><span class="createFlag"><i class="icon-certificate orange" title="Vừa tạo"></i>&nbsp;</span><span class="createCopyFlag"><i class="icon-copy orange" title="Sao y"></i>&nbsp;</span><span class="processingFlag"><i class="icon-share-alt" title="Đã chuyển"></i>&nbsp;</span><span class="ratifiedFlag"><i class="icon-ok-circle" title="Đã thông qua"></i>&nbsp;</span><span class="approvedInFlag"><i class="icon-ok-sign" title="Lãnh đạo đã duyệt"></i>&nbsp;</span><span class="sender">31/BC-VHXH</span>&nbsp;</div><div class="attachmentParent actionHandle dragHandle"><span class="attachment"><i class="icon-paper-clip" style="font-size: 16px;"></i></span></div><div class="subjectParent actionHandle dragHandle"><div>Phòng Văn hóa - Xã hội -  xã Phù Mỹ Tây - Tỉnh Gia Lai</div><span class="subject ">Báo cáo kết quả rà soát hồ sơ phục vụ công tác thu nhận mẫu sinh phẩm AND xác định danh tính hài cốt liệt sĩ</span><div></div></div></div></div></div></div></div><div class="mainDelimiter footerDelimiter"></div><div class="b-footer thm-message-list-bottom-toolbar"><div class="pull-right" style="margin-top: 6px;"><span id="listview-paging" class="paging" style="white-space: nowrap;"><span id="listview-paging-listview-paging-message-info-id"><b>1</b> - <b>1</b> / <b>1</b> </span><div class="btn-group"><button id="listview-paging-listview-pagingbtn-first" type="button" class="btn btn-xs btn-default" title="Trang đầu" disabled="disabled"><i class="icon-step-backward"></i></button><button id="listview-paging-listview-pagingbtn-prev" type="button" class="btn btn-xs btn-default" title="Trang trước" disabled=""><i class="icon-chevron-left"></i></button><div class="btn-group dropup"><button type="button" class="btn btn-default  dropdown-toggle" data-toggle="dropdown"><span data-page="number">1</span> <span class="caret"></span></button><ul class="dropdown-menu scrollable-menu" role="menu"><li><a>1</a></li></ul></div><button id="listview-paging-listview-pagingbtn-next" type="button" class="btn btn-xs btn-default" title="Trang sau" disabled=""><i class="icon-chevron-right"></i></button><button id="listview-paging-listview-pagingbtn-last" type="button" class="btn btn-xs btn-default" title="Trang cuối" disabled="disabled"><i class="icon-step-forward"></i></button><button id="listview-paging-listview-pagingbtn-refresh" type="button" class="btn btn-xs btn-default" title="Nạp lại"><i class="icon-refresh"></i></button></div></span></div></div></div></div>
+    
+    <div id="received-advance-search" class="dropdown-menu advance-search dropdown-caret">
+        <div class="row-fluid">
+            <div class="span6">
+                <div class="row-fluid">
+                    <label class="ilabel control-label" for="received-advance-search-txt-subject">Trích yếu:</label>
+                    <input type="text" id="received-advance-search-txt-subject" class="span12" placeholder="Nhập trích yếu để tìm kiếm">
+                </div>
+            </div>
+            <div class="span3">
+                <div class="row-fluid">
+                    <label class="ilabel control-label" for="received-advance-search-select-situation">Trạng thái:</label>
+                    <select id="received-advance-search-select-situation" class="span12">
+                        <option value="">Tất cả</option>
+                        <option value="none_read">Chưa đọc</option>
+                        <option value="booked">Đã vào sổ</option>
+                        <option value="none_booked">Chưa vào sổ</option>
+                        <option value="receive_in_date">Nhận trong ngày</option>
+                    </select>
+                </div>
+            </div>
+            <div class="span3">
+                <div class="row-fluid">
+                    <label class="ilabel control-label" for="received-advance-search-txt-field">Lĩnh vực:</label>
+                    <input type="text" id="received-advance-search-txt-field" class="span12" placeholder="Lĩnh vực">
+                </div>
+            </div>
+        </div>
+        <div class="row-fluid">
+            <div class="span3">
+                <div class="row-fluid">
+                    <label class="ilabel control-label" for="received-advance-search-txt-category">Loại văn bản:</label>
+                    <input type="text" id="received-advance-search-txt-category" class="span12" placeholder="Chọn loại văn bản">
+                </div>
+            </div>
+            <div class="span3">
+                <div class="row-fluid">
+                    <label class="ilabel control-label" for="received-advance-search-txt-sign-number">Số ký hiệu:</label>
+                    <input type="text" id="received-advance-search-txt-sign-number" class="span12">
+                </div>
+            </div>
+            <div class="span3">
+                <div class="row-fluid">
+                    <label class="ilabel control-label" for="received-advance-search-txt-author">Cơ quan ban hành/Tác giả:</label>
+                    <input type="text" id="received-advance-search-txt-author" class="span12">
+                </div>
+            </div>
+            <div class="span3">
+                <div class="row-fluid">
+                    <label class="ilabel control-label" for="received-advance-search-txt-doc-signer">Người ký:</label>
+                    <input type="text" id="received-advance-search-txt-doc-signer" class="span12">
+                </div>
+            </div>
+        </div>
+        <div class="row-fluid">
+            <div class="span6 box-search-date">
+                <div class="span6">
+                    <div class="row-fluid">
+                        <label class="ilabel control-label" for="received-advance-search-txt-doc-date-from">Ngày văn bản từ ngày:</label>
+                        <div class="row-fluid input-icon input-icon-right date">
+                            <input type="text" id="received-advance-search-txt-doc-date-from" class="span12 date-picker" autocomplete="off">
+                            <i class="icon-calendar"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="span6">
+                    <div class="row-fluid">
+                        <label class="ilabel control-label" for="received-advance-search-txt-doc-date-to">đến ngày:</label>
+                        <div class="row-fluid input-icon input-icon-right date">
+                            <input type="text" id="received-advance-search-txt-doc-date-to" class="span12 date-picker" autocomplete="off">
+                            <i class="icon-calendar"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="span6 box-search-date deadline">
+                <div class="span6">
+                    <div class="row-fluid">
+                        <label class="ilabel control-label" for="received-advance-search-txt-in-out-datefrom">Hạn xử lý từ ngày:</label>
+                        <div class="row-fluid input-icon input-icon-right date">
+                            <input type="text" id="received-advance-search-txt-in-out-datefrom" class="span12 date-picker" autocomplete="off">
+                            <i class="icon-calendar"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="span6">
+                    <div class="row-fluid">
+                        <label class="ilabel control-label" for="received-advance-search-txt-in-out-dateto">đến ngày:</label>
+                        <div class="row-fluid input-icon input-icon-right date">
+                            <input type="text" id="received-advance-search-txt-in-out-dateto" class="span12 date-picker" autocomplete="off">
+                            <i class="icon-calendar"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row-fluid">
+            <div class="span3">
+                <div class="row-fluid">
+                    <label class="ilabel control-label" for="received-advance-search-txt-security">Độ mật:</label>
+                    <select id="received-advance-search-txt-security" class="span12">
+                        <option value="-1" selected="selected">Tất cả</option>
+                        <option value="0">Bình thường</option>
+                        <option value="1">Mật</option>
+                        <option value="2">Tuyệt mật</option>
+                        <option value="3">Tối mật</option>
+                    </select>
+                </div>
+            </div>
+            <div class="span3">
+                <div class="row-fluid">
+                    <label class="ilabel control-label" for="received-advance-search-txt-book">Sổ văn bản:</label>
+                    <input type="text" id="received-advance-search-txt-book" class="span12">
+                </div>
+            </div>
+            <div class="span3">
+                <div class="row-fluid">
+                    <label class="ilabel control-label" for="received-advance-search-txt-number-from">Số đến từ:</label>
+                    <input type="text" id="received-advance-search-txt-number-from" class="span12">
+                </div>
+            </div>
+            <div class="span3">
+                <div class="row-fluid">
+                    <label class="ilabel control-label" for="received-advance-search-txt-number-to">đến số:</label>
+                    <input type="text" id="received-advance-search-txt-number-to" class="span12">
+                </div>
+            </div>
+        </div>
+        <div class="row-fluid" style="padding-bottom: 5px;">
+            <div class="span3">
+                <div class="row-fluid">
+                    <label class="ilabel control-label" for="received-advance-search-chk-retrieve">Văn bản thu hồi:</label>
+                    <label><input type="checkbox" id="received-advance-search-chk-retrieve" value=""><span class="lbl"> Là văn bản đã bị thu hồi</span></label>
+                </div>
+            </div>
+            <div class="span3">
+                <div class="row-fluid">
+                    <label class="ilabel control-label" for="received-advance-search-select-steering-type">Văn bản:</label>
+                    <select id="received-advance-search-select-steering-type" class="span12">
+                        <option value="" selected="selected">Tất cả</option>
+                        <option value="0">Không là văn bản chỉ đạo</option>
+                        <option value="1">Văn bản chỉ đạo</option>
+                        <option value="2">Văn bản trả lời cho văn bản chỉ đạo</option>
+                        <option value="3">Văn bản thu hồi</option>
+                    </select>
+                </div>
+            </div>
+            <div class="span3">
+                <div class="row-fluid">
+                    <label class="ilabel control-label" for="received-advance-search-txt-publisher-unit">Cấp CQBH:</label>
+                    <input type="text" id="received-advance-search-txt-publisher-unit" class="span12">
+                </div>
+            </div>
+        </div>
+        <div class="row-fluid" style="text-align:center">
+            <button data-action-search="search" type="button" class="btn btn-success btn-small">
+                <i class="icon-search"></i> Tìm kiếm
+            </button>
+            <button data-action-search="close" type="button" class="btn btn-danger btn-small">
+                <i class="icon-remove"></i> Đóng
+            </button>
+        </div>
+    </div>
+<div class="ui-resizable-handle ui-resizable-e" style="z-index: 90;"></div><div class="ui-resizable-handle ui-resizable-s" style="z-index: 90;"></div><div class="ui-resizable-handle ui-resizable-se ui-icon ui-icon-gripsmall-diagonal-se" style="z-index: 90;"></div></div>
