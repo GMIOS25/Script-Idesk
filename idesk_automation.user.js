@@ -1,238 +1,391 @@
 // ==UserScript==
-// @name         iDesk Auto-Fill Helper
+// @name         iDesk RPA Auto-Fill v2.0
 // @namespace    http://inet.vn/
-// @version      1.1
-// @description  Hệ thống tự động hóa xử lý văn bản đến trên iDesk sử dụng AI
+// @version      2.0
+// @description  iDesk Automation: Quét danh sách VB đến → Gửi AI → Tự động điền "Xử lý chính", "Phối hợp xử lý", "Hạn xử lý" → Đồng ý
 // @author       Senior Developer
 // @match        https://vpdt.gialai.gov.vn/cumphumy/smartcloud/idesk6/page/paperwork/index.cpx*
+// @match        https://vpdt.gialai.gov.vn/cumphumy/smartcloud/idesk6/page/paperwork/*
+// @match        https://vpdt.gialai.gov.vn/cumphumy/smartcloud/*
+// @icon         https://vpdt.gialai.gov.vn/favicon.ico
 // @grant        GM_xmlhttpRequest
+// @grant        GM_addStyle
 // @grant        unsafeWindow
 // @run-at       document-end
+// @downloadURL  https://raw.githubusercontent.com/GMIOS25/Script-Idesk/main/idesk_automation.user.js
+// @updateURL    https://raw.githubusercontent.com/GMIOS25/Script-Idesk/main/idesk_automation.user.js
 // ==/UserScript==
 
-// CHANGELOG v1.1 (đối chiếu với resource/*.html thật do người dùng cung cấp):
-// - Fix: chọn "Sổ văn bản đến" luôn throw lỗi vì ID container do Select2 tự sinh
-//   có ký tự "\" thật chèn trước dấu "-" (bug của bản Select2 đang chạy trên trang này).
-//   -> Chuyển sang lấy container qua input gốc ổn định #edocs-txt-book (previousElementSibling).
-// - Fix: scanList() ra 0 kết quả do race-condition (SPA load AJAX chưa xong) -> thêm retry
-//   + lọc theo visibility (offsetParent) để không lẫn dữ liệu từ widget khác đang ẩn.
-// - Thêm: MutationObserver tự quét lại danh sách khi DOM đổi, khỏi cần bấm tay.
-// - Fix: kéo popup bị giật/đứng khi rê qua iframe (khung xem PDF đính kèm) do dùng
-//   mousemove trên document -> chuyển sang Pointer Events + setPointerCapture.
-// - Fix: bug tiềm ẩn khi bind thẳng hàm nhận tham số vào addEventListener('click', ...).
-// - Cải thiện: "Hạn xử lý" set số ngày trước rồi ép lại đúng ngày theo công thức
-//   hiện tại + N ngày, tránh lệch nếu iDesk tự tính theo quy tắc khác.
+// CHANGELOG v2.0
+// - FIX CRITICAL: Typo "qrreceiving" → "qsreceiving" (AJAX interceptor không hoạt động)
+// - FIX: Bổ sung Fetch API interceptor (iDesk dùng fetch cho 1 số API)
+// - FIX: CSS injection dùng GM_addStyle thay vì innerHTML (best practice)
+// - FIX: Cải tiến tree popup selector - click chuẩn hơn, retry nếu popup chưa kịp render
+// - FIX: Download PDF dùng GM_xmlhttpRequest (blob) thay fetch (CORS issue)
+// - FIX: autoFillAndSubmit - chờ các transition DOM kỹ hơn, dùng MutationObserver khi cần
+// - NEW: Floating progress bar + log console panel
+// - NEW: Config persistence dùng GM_setValue/GM_getValue
+// - NEW: Scan tự động sau khi chuyển tab hoặc thay đổi filter
+// - NEW: Bỏ qua "Số đến" - chỉ fill "Sổ văn bản đến" rồi Lưu và chuyển
+// - NEW: Xử lý lỗi chi tiết hơn, retry khi timeout
 
 (function() {
     'use strict';
 
-    // 1. CONFIGURATION & SELECTORS
+    // ============================================================
+    // 1. CONFIGURATION
+    // ============================================================
     const CONFIG = {
         BACKEND_URL: 'http://localhost:5000/api/process-doc',
-        DEFAULT_BOOK: 'Văn bản do địa phương gửi đến', // Tên Sổ văn bản đến mặc định
+        DEFAULT_BOOK: 'Sổ văn bản đến UBND tỉnh',
         DELAY_MS: {
-            SELECT_DOC: 1000,       // Chờ sau khi click chọn văn bản ở panel trái
-            OPEN_SELECT2: 300,      // Chờ mở select2 dropdown
-            CLICK_SAVE_TRANSFER: 1000, // Chờ mở form "Thông tin xử lý" sau khi click "Lưu và chuyển"
-            OPEN_TREE: 500,         // Chờ mở popup Chọn người/Phòng ban
-            CLOSE_TREE: 300,        // Chờ đóng popup Chọn người/Phòng ban
-            AFTER_SUBMIT: 1500      // Chờ sau khi nhấn "Đồng ý" để lưu hoàn tất
+            SELECT_DOC: 1200,
+            OPEN_SELECT2: 400,
+            AFTER_BOOK_SELECT: 800,
+            CLICK_SAVE_TRANSFER: 1500,
+            OPEN_TREE: 1000,
+            TREE_SEARCH: 600,
+            CLOSE_TREE: 400,
+            AFTER_SUBMIT: 2000,
+            BETWEEN_DOCS: 1000
         }
     };
 
-    // DOM Selectors
-    const SELECTORS = {
-        // Chọn theo ID cụ thể trước (nhanh hơn), fallback sang class chung + lọc visible
-        // nếu ID bị trùng lặp giữa nhiều widget (Xử lý chính, Cho ý kiến... cùng preload trong DOM).
-        LEFT_PANEL_ITEMS: '#listview-list-content div.messageListItem',
-        LEFT_PANEL_ITEMS_FALLBACK: 'div.messageListItem[data-id]',
-        RIGHT_PANEL_CONTAINER: '#ed-new-receiver-document-widget',
-        
-        // Right Panel Fields
+    // Selectors - ánh xạ từ resource/*.html
+    const S = {
+        // Left panel
+        LEFT_LIST: '#listview-list-content div.messageListItem',
+        LEFT_LIST_FALLBACK: 'div.messageListItem[data-id]',
+
+        // Right panel - form fields
         SUBJECT: '#edocs-txt-subject',
         SIGN_NUMBER: '#edocs-txt-sign-number',
         DOC_DATE: '#edocs-txt-doc-date-str',
+        CATEGORY_INPUT: '#edocs-txt-category',
         AGENCY: '#edocs-txt-agency',
         SIGNER: '#edocs-txt-signer',
-        SHOW_MORE_BTN: '#edocs-btn-hide-show-more-info',
+        PUBLISHER_UNIT: '#edocs-txt-publisher-unit',
+        SHOW_MORE: '#edocs-btn-hide-show-more-info',
 
-        // KHÔNG dùng ID auto-gen của Select2 (dạng #s2id_edocs-txt-book) vì phiên bản Select2
-        // đang chạy trên trang này chèn ký tự "\" thật vào trước mỗi dấu "-" trong id container
-        // (đã kiểm chứng bằng byte thô từ right_panel.html): id thật là "s2id_edocs\-txt\-book".
-        // CSS selector "#s2id_edocs-txt-book" (không có \) sẽ KHÔNG BAO GIỜ match được.
-        // => Thay vào đó lấy qua input gốc ổn định, không đổi theo phiên bản Select2.
-        BOOK_ORIGINAL_INPUT: '#edocs-txt-book',
-        CATEGORY_ORIGINAL_INPUT: '#edocs-txt-category',
+        // Sổ văn bản đến section
+        BOOK_INPUT: '#edocs-txt-book',
+        SERIAL_NUMBER: '#edocs-txt-serial-number',
+
+        // Buttons
         SAVE_TRANSFER_BTN: '#ed-new-receiver-btn-save-transfer',
-        
-        // Transfer Screen Selectors (Right panel after save & transfer)
+        SAVE_BTN: '#ed-new-receiver-btn-save',
+
+        // Transfer screen (after Lưu và chuyển)
         TRANSFER_CONTAINER: '#ed-transfer-document-container',
+        TRANSFER_CONTENT: '#ed-transfer-document-content',
+        SUBJECT_DISPLAY: '#ed-transfer-doc-text-subject',
         RESPONSIBLE_LINK: '#ed-transfer-select-user-responsible a.user-box-link',
+        RESPONSIBLE_WRAP: '#ed-transfer-select-user-responsible',
         PARTICIPANTS_LINK: '#ed-transfer-select-user-participants a.user-box-link',
+        PARTICIPANTS_WRAP: '#ed-transfer-select-user-participants',
         DEADLINE_INPUT: '#ed-transfer-txt-deadline',
-        DEADLINE_NUMBER_INPUT: '#ed-transfer-txt-deadline-number',
+        DEADLINE_NUMBER: '#ed-transfer-txt-deadline-number',
         AGREE_BTN: '#ed-transfer-btn-transfer',
-        CANCEL_BTN: '#ed-transfer-btn-cancel'
+        CANCEL_BTN: '#ed-transfer-btn-cancel',
+        PRIORITY_SELECT: '#ed-transfer-select-priority',
+        CONTENT_TEXTAREA: '#ed-transfer-txt-content',
+
+        // File attachment table
+        FILE_TABLE: '#ed-file-origin-table tbody',
+        FILE_ROW: '#ed-file-origin-table tbody tr',
+        FILE_DOWNLOAD_LINK: 'a.link-file[data-file-action="download"]',
+        FILE_VIEW_LINK: 'a[data-file-action="view"]',
     };
 
-    // Document Cache & State
-    const docCache = new Map();
-    let isProcessingQueue = false;
+    // ============================================================
+    // 2. STATE & CACHE
+    // ============================================================
+    const docCache = new Map(); // Map<id, DocObject>
+    let isProcessing = false;
+    let scanObserver = null;
+    let logPanel = null;
 
-    // Helper sleep function
+    // ============================================================
+    // 3. HELPERS
+    // ============================================================
     const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-    // Lấy container Select2 (.select2-container) dựa trên ID của input/select GỐC (ổn định),
-    // thay vì dựa vào ID "s2id_..." mà Select2 tự sinh (đã xác nhận bị lỗi escape \- trên trang này).
-    // Select2 3.x luôn chèn .select2-container làm anh/em (sibling) ngay sát input gốc,
-    // nhưng thứ tự trước/sau có thể khác nhau tùy field nên ta thử cả 2 hướng cho chắc.
-    const getSelect2ContainerByFieldId = (originalFieldId) => {
+    const setStatus = (msg) => {
+        const el = document.getElementById('rpa-footer-status');
+        if (el) el.textContent = msg;
+        appendLog(msg);
+        console.log(`[iDesk RPA] ${msg}`);
+    };
+
+    const appendLog = (msg) => {
+        const logBody = document.getElementById('rpa-log-body');
+        if (logBody) {
+            const time = new Date().toLocaleTimeString('vi-VN');
+            const row = document.createElement('div');
+            row.className = 'rpa-log-entry';
+            row.innerHTML = `<span class="rpa-log-time">[${time}]</span> ${msg}`;
+            logBody.appendChild(row);
+            logBody.scrollTop = logBody.scrollHeight;
+        }
+    };
+
+    // Format date DD/MM/YYYY
+    const formatDate = (date) => {
+        const d = date || new Date();
+        const dd = String(d.getDate()).padStart(2, '0');
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const yyyy = d.getFullYear();
+        return `${dd}/${mm}/${yyyy}`;
+    };
+
+    // Parse DD/MM/YYYY to Date
+    const parseDate = (str) => {
+        if (!str) return null;
+        const parts = str.split('/');
+        if (parts.length === 3) {
+            return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+        }
+        return null;
+    };
+
+    // Calculate deadline: today + N days
+    const calcDeadline = (days) => {
+        const date = new Date();
+        date.setDate(date.getDate() + parseInt(days));
+        return formatDate(date);
+    };
+
+    // Get Select2 container reliably (xem right_panel.html)
+    const getSelect2Container = (originalFieldId) => {
         const hiddenEl = document.querySelector(originalFieldId);
         if (!hiddenEl) return null;
 
+        // Select2 3.x chèn container ngay trước hoặc sau input gốc
         const prev = hiddenEl.previousElementSibling;
         if (prev && prev.classList.contains('select2-container')) return prev;
 
         const next = hiddenEl.nextElementSibling;
         if (next && next.classList.contains('select2-container')) return next;
 
-        // Fallback cuối: leo lên parent gần nhất rồi tìm .select2-container bên trong
+        // Fallback: tìm trong parent
         const parent = hiddenEl.closest('.row-fluid, .span4, .span3, div');
         return parent ? parent.querySelector('.select2-container') : null;
     };
 
-    // 2. NETWORK INTERCEPTOR (AJAX)
-    // Intercept iDesk AJAX calls to capture document metadata & IDs automatically
-    const interceptAjax = () => {
+    // Query visible (not display:none) left panel items
+    const getVisibleItems = () => {
+        let items = Array.from(document.querySelectorAll(S.LEFT_LIST));
+        if (items.length === 0) {
+            items = Array.from(document.querySelectorAll(S.LEFT_LIST_FALLBACK));
+        }
+        return items.filter(el => el.offsetParent !== null);
+    };
+
+    // ============================================================
+    // 4. NETWORK INTERCEPTOR (XHR + Fetch)
+    // ============================================================
+    const interceptXHR = () => {
         const XHR = XMLHttpRequest.prototype;
-        const open = XHR.open;
-        const send = XHR.send;
+        const origOpen = XHR.open;
+        const origSend = XHR.send;
 
         XHR.open = function(method, url) {
             this._url = url;
-            return open.apply(this, arguments);
+            return origOpen.apply(this, arguments);
         };
 
-        XHR.send = function() {
+        XHR.send = function(body) {
             this.addEventListener('load', function() {
                 try {
-                    if (this._url.includes('qrreceiving.cpx')) {
-                        const response = JSON.parse(this.responseText);
-                        handleListResponse(response);
-                    } else if (this._url.includes('view.cpx')) {
-                        const response = JSON.parse(this.responseText);
-                        handleViewResponse(response);
+                    const url = this._url || '';
+                    if (url.includes('qsreceiving.cpx')) {
+                        const data = JSON.parse(this.responseText);
+                        handleListResponse(data);
+                    } else if (url.includes('view.cpx') && url.includes('exeacode=')) {
+                        const data = JSON.parse(this.responseText);
+                        handleViewResponse(data);
                     }
-                } catch (e) {}
+                } catch (e) {
+                    // silent
+                }
             });
-            return send.apply(this, arguments);
+            return origSend.apply(this, arguments);
         };
     };
 
-    const handleListResponse = (data) => {
-        if (data && data.items) {
-            data.items.forEach(item => {
-                const id = item.id.toString();
-                const ed = item.edSearchDto || {};
-                
-                // Get existing or create new entry
-                const doc = docCache.get(id) || { id };
-                doc.subject = ed.subject || doc.subject;
-                doc.signNumber = ed.signNumber || doc.signNumber;
-                doc.category = ed.category || doc.category;
-                doc.docDateStr = ed.docDateStr || doc.docDateStr;
-                doc.author = ed.author || doc.author;
-                doc.signer = ed.signer || doc.signer;
-                doc.creatorAcode = ed.creatorAcode || doc.creatorAcode;
-                
-                docCache.set(id, doc);
+    const interceptFetch = () => {
+        const origFetch = unsafeWindow.fetch.bind(unsafeWindow);
+        unsafeWindow.fetch = function(input, init) {
+            const url = typeof input === 'string' ? input : (input.url || '');
+            return origFetch(input, init).then(async (response) => {
+                // Clone response để đọc body mà không ảnh hưởng original consumer
+                if (url.includes('qsreceiving.cpx') || url.includes('view.cpx')) {
+                    const clone = response.clone();
+                    try {
+                        const data = await clone.json();
+                        if (url.includes('qsreceiving.cpx')) {
+                            handleListResponse(data);
+                        } else if (url.includes('view.cpx')) {
+                            handleViewResponse(data);
+                        }
+                    } catch (e) { /* silent */ }
+                }
+                return response;
+            }).catch(err => {
+                throw err;
             });
-            updateDashboardTable();
-        }
+        };
+    };
+
+    // ============================================================
+    // 5. RESPONSE HANDLERS
+    // ============================================================
+    const handleListResponse = (data) => {
+        if (!data || !data.items) return;
+        const count = data.items.length;
+        appendLog(`📥 API qsreceiving: ${count} văn bản`);
+
+        data.items.forEach(item => {
+            const id = item.id.toString();
+            const ed = item.edSearchDto || {};
+            const doc = docCache.get(id) || { id };
+
+            doc.signNumber = ed.signNumber || doc.signNumber || '';
+            doc.subject = ed.subject || doc.subject || '';
+            doc.category = ed.category || doc.category || '';
+            doc.author = ed.author || doc.author || '';
+            doc.signer = ed.signer || doc.signer || '';
+            doc.docDateStr = ed.docDateStr || doc.docDateStr || '';
+            doc.creatorAcode = ed.creatorAcode || doc.creatorAcode || '';
+            doc.status = doc.status || 'idle';
+            doc.aiData = doc.aiData || null;
+
+            docCache.set(id, doc);
+        });
+        updateDashboard();
     };
 
     const handleViewResponse = (data) => {
-        if (data && data.ed) {
-            const id = data.ed.id.toString();
-            const doc = docCache.get(id) || { id };
-            
-            doc.subject = data.ed.subject || doc.subject;
-            doc.signNumber = data.ed.signNumber || doc.signNumber;
-            doc.category = data.ed.category || doc.category;
-            doc.docDateStr = data.ed.docDateStr || doc.docDateStr;
-            doc.author = data.ed.author || doc.author;
-            doc.signer = data.ed.signer || doc.signer;
-            doc.creatorAcode = data.ed.creatorAcode || doc.creatorAcode;
-            doc.attachments = data.attachments || [];
-            
-            docCache.set(id, doc);
-            updateDashboardTable();
-        }
+        if (!data || !data.ed) return;
+        const id = data.ed.id.toString();
+        const doc = docCache.get(id) || { id };
+        const ed = data.ed;
+
+        doc.subject = ed.subject || doc.subject || '';
+        doc.signNumber = ed.signNumber || doc.signNumber || '';
+        doc.category = ed.category || doc.category || '';
+        doc.author = ed.author || doc.author || '';
+        doc.signer = ed.signer || doc.signer || '';
+        doc.docDateStr = ed.docDateStr || doc.docDateStr || '';
+        doc.creatorAcode = ed.creatorAcode || doc.creatorAcode || '';
+        doc.attachments = data.attachments || doc.attachments || [];
+        doc.docType = ed.docType || doc.docType || 'normal';
+        doc.form = ed.form || doc.form || 'original';
+        doc.priority = ed.priority !== undefined ? ed.priority : doc.priority;
+        doc.security = ed.security !== undefined ? ed.security : doc.security;
+
+        docCache.set(id, doc);
+        updateDashboard();
     };
 
-    // Get document by ID. If not fully loaded, fetch it programmatically
-    const getOrFetchDocDetails = async (id) => {
+    // ============================================================
+    // 6. PDF DOWNLOAD (dùng GM_xmlhttpRequest để tránh CORS)
+    // ============================================================
+    const downloadPDF = (contentUid, fileName) => {
+        return new Promise((resolve, reject) => {
+            const url = `/cumphumy/smartcloud/docx/download.cpx?docID=${contentUid}&view=pdf&t=${Date.now()}`;
+            setStatus(`Đang tải PDF: ${fileName}...`);
+
+            GM_xmlhttpRequest({
+                method: 'GET',
+                url: window.location.origin + url,
+                responseType: 'blob',
+                onload: (resp) => {
+                    if (resp.status >= 200 && resp.status < 300) {
+                        const blob = resp.response;
+                        const file = new File([blob], fileName || `document_${contentUid}.pdf`, {
+                            type: blob.type || 'application/pdf'
+                        });
+                        resolve(file);
+                    } else {
+                        reject(new Error(`Download PDF thất bại: HTTP ${resp.status}`));
+                    }
+                },
+                onerror: (err) => {
+                    reject(new Error(`Không thể download PDF: ${err}`));
+                },
+                ontimeout: () => {
+                    reject(new Error('Timeout khi download PDF'));
+                }
+            });
+        });
+    };
+
+    // ============================================================
+    // 7. GET FULL DOC DETAILS (click + fetch nếu thiếu)
+    // ============================================================
+    const ensureDocDetails = async (id) => {
         let doc = docCache.get(id.toString());
         if (!doc) {
-            doc = { id: id.toString() };
+            doc = { id: id.toString(), status: 'idle' };
+            docCache.set(id.toString(), doc);
         }
-        
-        // If we don't have creatorAcode, we look at the DOM or wait
-        if (!doc.creatorAcode) {
-            // Try to find if currently clicked or in list
+
+        // Nếu chưa có đầy đủ, thử click vào item để load
+        if (!doc.creatorAcode || !doc.attachments || doc.attachments.length === 0) {
             const itemEl = document.querySelector(`.messageListItem[data-id="${id}"]`);
             if (itemEl) {
-                // If not loaded, we click it to load
-                itemEl.click();
-                await sleep(CONFIG.DELAY_MS.SELECT_DOC);
+                // Check xem có đang được chọn chưa
+                if (!itemEl.classList.contains('selected')) {
+                    itemEl.click();
+                    await sleep(CONFIG.DELAY_MS.SELECT_DOC);
+                }
                 doc = docCache.get(id.toString()) || doc;
             }
         }
-        
-        // Programmatically fetch view details if missing attachment info
+
+        // Fetch trực tiếp nếu vẫn thiếu
         if (doc.creatorAcode && (!doc.attachments || doc.attachments.length === 0)) {
             try {
-                const res = await fetch(`/cumphumy/smartcloud/document/edocs/view.cpx?exeacode=${doc.creatorAcode}&id=${id}`);
-                const data = await res.json();
-                handleViewResponse(data);
-                doc = docCache.get(id.toString());
-            } catch (err) {
-                console.error("Error fetching view details programmatically:", err);
+                const viewUrl = `/cumphumy/smartcloud/document/edocs/view.cpx?exeacode=${doc.creatorAcode}&id=${id}`;
+                const resp = await fetch(viewUrl);
+                if (resp.ok) {
+                    const data = await resp.json();
+                    handleViewResponse(data);
+                    doc = docCache.get(id.toString()) || doc;
+                }
+            } catch (e) {
+                appendLog(`⚠️ Fetch view.cpx cho ${id} thất bại: ${e.message}`);
             }
         }
+
         return doc;
     };
 
-    // 3. CORE AUTOMATION FUNCTIONS (RPA)
-
-    // Download attachment PDF from iDesk
-    const downloadPDF = async (contentUid, fileName) => {
-        const url = `/cumphumy/smartcloud/docx/download.cpx?docID=${contentUid}&view=pdf`;
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`Could not fetch PDF: ${res.statusText}`);
-        const blob = await res.blob();
-        return new File([blob], fileName, { type: 'application/pdf' });
-    };
-
-    // Call local/remote AI Backend
+    // ============================================================
+    // 8. CALL AI BACKEND (gửi metadata + PDF)
+    // ============================================================
     const callAIBackend = async (doc) => {
-        // Find PDF attachment
-        const pdfAttach = (doc.attachments || []).find(att => att.format === 'pdf' || att.name.toLowerCase().endsWith('.pdf'));
+        // Tìm file PDF đầu tiên trong attachments
+        const pdfAttach = (doc.attachments || []).find(a =>
+            a.format === 'pdf' || (a.name || '').toLowerCase().endsWith('.pdf')
+        );
+
         if (!pdfAttach) {
-            throw new Error("Không tìm thấy file đính kèm PDF nào!");
+            throw new Error(`Không tìm thấy file PDF đính kèm cho VB "${doc.signNumber}"`);
         }
 
         const pdfFile = await downloadPDF(pdfAttach.contentUid, pdfAttach.name);
-        
-        // Clean metadata for AI
+
+        // Metadata cẩn thận loại bỏ undefined/null
         const metadata = {
             id: doc.id,
-            so_hieu: doc.signNumber,
-            loai_vb: doc.category,
-            cq_bh: doc.author,
-            ngay_vb: doc.docDateStr,
-            nguoi_ky: doc.signer,
-            trich_yeu: doc.subject
+            so_hieu: doc.signNumber || '',
+            loai_vb: doc.category || '',
+            cq_bh: doc.author || '',
+            ngay_vb: doc.docDateStr || '',
+            nguoi_ky: doc.signer || '',
+            trich_yeu: doc.subject || ''
         };
 
         const formData = new FormData();
@@ -240,843 +393,866 @@
         formData.append('metadata', JSON.stringify(metadata));
 
         return new Promise((resolve, reject) => {
+            setStatus(`📤 Gửi "${doc.signNumber}" đến AI...`);
+
             GM_xmlhttpRequest({
                 method: 'POST',
                 url: CONFIG.BACKEND_URL,
                 data: formData,
-                onload: function(response) {
-                    if (response.status === 200) {
+                onload: (resp) => {
+                    if (resp.status === 200) {
                         try {
-                            const result = JSON.parse(response.responseText);
+                            const result = JSON.parse(resp.responseText);
+                            appendLog(`✅ AI phản hồi cho "${doc.signNumber}": ${JSON.stringify(result)}`);
                             resolve(result);
                         } catch (e) {
-                            reject(new Error("Lỗi parse JSON kết quả AI: " + e.message));
+                            reject(new Error(`Parse JSON lỗi: ${e.message}`));
                         }
                     } else {
-                        reject(new Error("AI Server trả về code: " + response.status));
+                        reject(new Error(`Backend HTTP ${resp.status}: ${resp.responseText}`));
                     }
                 },
-                onerror: function(err) {
-                    reject(new Error("Không kết nối được tới AI Server (" + CONFIG.BACKEND_URL + ")"));
+                onerror: () => {
+                    reject(new Error(`Không kết nối được tới AI (${CONFIG.BACKEND_URL})`));
+                },
+                ontimeout: () => {
+                    reject(new Error('Timeout gọi AI backend'));
                 }
             });
         });
     };
 
-    // Select register in Select2
-    const selectBookDropdown = async (bookName) => {
-        const select2Container = getSelect2ContainerByFieldId(SELECTORS.BOOK_ORIGINAL_INPUT);
-        if (!select2Container) throw new Error("Không tìm thấy Sổ văn bản đến! (container Select2 không xác định được qua #edocs-txt-book, kiểm tra lại DOM)");
-        
-        const trigger = select2Container.querySelector('.select2-choice');
-        if (!trigger) throw new Error("Không tìm thấy nút bấm chọn Sổ văn bản!");
-        
-        // Open select2
+    // ============================================================
+    // 9. SELECT2: CHỌN "SỔ VĂN BẢN ĐẾN"
+    // ============================================================
+    const selectBook = async (bookName) => {
+        const container = getSelect2Container(S.BOOK_INPUT);
+        if (!container) throw new Error('Không tìm thấy container Select2 của "Sổ văn bản đến"');
+
+        const trigger = container.querySelector('.select2-choice');
+        if (!trigger) throw new Error('Không tìm thấy nút chọn Sổ văn bản');
+
+        // Check xem đã chọn đúng chưa
+        const currentText = trigger.querySelector('.select2-chosen')?.textContent?.trim() || '';
+        if (currentText === bookName) {
+            appendLog(`✅ Đã chọn sẵn: "${bookName}"`);
+            return;
+        }
+
+        // Mở dropdown
         trigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
         await sleep(CONFIG.DELAY_MS.OPEN_SELECT2);
-        
-        // Find dropdown options - ưu tiên khớp chính xác trước, tránh chọn nhầm khi
-        // nhiều tên sổ chứa chung tiền tố (VD "Sổ văn bản đến" vs "Sổ văn bản đến Trung ương")
-        const results = document.querySelectorAll('#select2-drop ul.select2-results li');
+
+        // Tìm option trong dropdown
+        const drop = document.getElementById('select2-drop');
+        if (!drop) throw new Error('Không thấy dropdown Select2 mở ra');
+
+        const items = drop.querySelectorAll('ul.select2-results li');
         let target = null;
-        for (const li of results) {
-            if (li.textContent.trim() === bookName) { target = li; break; }
+
+        // Ưu tiên match chính xác
+        for (const li of items) {
+            const text = li.textContent.trim();
+            if (text === bookName) { target = li; break; }
         }
         if (!target) {
-            for (const li of results) {
-                if (li.textContent.trim().includes(bookName)) { target = li; break; }
+            for (const li of items) {
+                const text = li.textContent.trim();
+                if (text.includes(bookName)) { target = li; break; }
+            }
+        }
+        if (!target) {
+            // Fallback: chọn cái đầu tiên
+            target = items[0];
+            if (target) {
+                appendLog(`⚠️ Không tìm thấy "${bookName}", chọn "${target.textContent.trim()}" làm mặc định`);
             }
         }
 
         if (target) {
             target.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+            await sleep(CONFIG.DELAY_MS.AFTER_BOOK_SELECT);
+            appendLog(`✅ Đã chọn sổ: "${target.textContent.trim()}"`);
         } else {
-            // Close dropdown if option not found
-            document.body.click();
-            throw new Error(`Không tìm thấy sổ '${bookName}' trong dropdown!`);
+            document.body.click(); // đóng dropdown
+            throw new Error('Không tìm thấy sổ nào trong dropdown!');
         }
     };
 
-    // Check tree popup nodes and click match
-    const selectNodeInTreePopup = async (linkSelector, targetName) => {
+    // ============================================================
+    // 10. TREE POPUP: CHỌN NGƯỜI / PHÒNG BAN (Xử lý chính, Phối hợp)
+    // ============================================================
+    const selectTreeItem = async (linkSelector, wrapSelector, targetName) => {
+        if (!targetName || targetName.trim() === '') {
+            appendLog(`⚠️ Bỏ qua trống: ${linkSelector}`);
+            return false;
+        }
+
+        // Click vào link "+ Chọn người, phòng ban..."
         const link = document.querySelector(linkSelector);
-        if (!link) throw new Error(`Không tìm thấy link mở danh sách chọn: ${linkSelector}`);
-        
+        if (!link) {
+            appendLog(`⚠️ Không tìm thấy link: ${linkSelector}`);
+            return false;
+        }
+
         link.click();
         await sleep(CONFIG.DELAY_MS.OPEN_TREE);
-        
-        const popups = document.querySelectorAll('.popover, .dropdown-menu, .tree, [role="listbox"], .modal, .select2-drop');
-        let clicked = false;
-        
-        for (const popup of popups) {
-            if (popup.offsetWidth > 0 && popup.offsetHeight > 0) { // check visibility
-                const labels = popup.querySelectorAll('span, div, a, li, label');
-                // Exact text match first
-                for (const label of labels) {
-                    if (label.childNodes.length > 0 && label.textContent.trim() === targetName) {
-                        const checkbox = label.querySelector('input[type="checkbox"], .lbl, .ace');
-                        if (checkbox) checkbox.click();
-                        else label.click();
-                        clicked = true;
-                        break;
-                    }
-                }
-                if (clicked) break;
-                
-                // Partial match if exact not found
-                for (const label of labels) {
-                    if (label.textContent.trim().includes(targetName)) {
-                        const checkbox = label.querySelector('input[type="checkbox"], .lbl, .ace');
-                        if (checkbox) checkbox.click();
-                        else label.click();
-                        clicked = true;
-                        break;
-                    }
-                }
-                if (clicked) break;
+
+        // Tìm popup đang mở - thử nhiều selector
+        let popup = null;
+        const popupSelectors = [
+            '.popover:not(.hide):not([style*="display: none"])',
+            '.modal:not(.hide):not([style*="display: none"])',
+            '.ui-dialog:not([style*="display: none"])',
+            '.select2-drop:not([style*="display: none"])',
+            'div[role="dialog"]:not([style*="display: none"])',
+            '.dropdown-menu:not(.hide):not([style*="display: none"])'
+        ];
+
+        for (const sel of popupSelectors) {
+            const el = document.querySelector(sel);
+            if (el && el.offsetParent !== null) {
+                popup = el;
+                break;
             }
         }
-        
-        // Close popup
-        document.body.click();
-        await sleep(CONFIG.DELAY_MS.CLOSE_TREE);
-        
-        if (!clicked) {
-            console.warn(`Cảnh báo: Không click được phòng ban/nhân sự: "${targetName}" trong popup.`);
+
+        if (!popup) {
+            appendLog(`⚠️ Không tìm thấy popup, thử tìm theo visibility...`);
+            // Fallback: tìm tất cả popup visible
+            const all = document.querySelectorAll('.popover, .modal, .ui-dialog, .dropdown-menu');
+            for (const el of all) {
+                if (el.offsetParent !== null) {
+                    popup = el;
+                    break;
+                }
+            }
         }
+
+        if (!popup) {
+            appendLog(`⚠️ Không mở được popup - bỏ qua "${targetName}"`);
+            document.body.click();
+            await sleep(200);
+            return false;
+        }
+
+        // Thử tìm kiếm
+        const searchInput = popup.querySelector('input[type="text"]');
+        if (searchInput) {
+            searchInput.value = targetName;
+            searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+            searchInput.dispatchEvent(new Event('keyup', { bubbles: true }));
+            await sleep(CONFIG.DELAY_MS.TREE_SEARCH);
+        }
+
+        // Tìm label chứa text match
+        const labels = popup.querySelectorAll('label, span, a, li, .user-box-item, .text, div');
+        let clicked = false;
+
+        // Hàm thử click vào phần tử
+        const tryClick = (el) => {
+            // Ưu tiên click vào checkbox/radio
+            const cb = el.querySelector('input[type="checkbox"], input[type="radio"]');
+            if (cb) {
+                cb.click();
+                return true;
+            }
+            // Hoặc click vào label
+            el.click();
+            return true;
+        };
+
+        // Match chính xác
+        for (const el of labels) {
+            const text = el.textContent.trim();
+            if (text === targetName && el.offsetParent !== null) {
+                tryClick(el);
+                clicked = true;
+                break;
+            }
+        }
+
+        // Match includes
+        if (!clicked) {
+            for (const el of labels) {
+                const text = el.textContent.trim();
+                if (text.includes(targetName) && el.offsetParent !== null) {
+                    tryClick(el);
+                    clicked = true;
+                    break;
+                }
+            }
+        }
+
+        if (clicked) {
+            appendLog(`✅ Đã chọn "${targetName}"`);
+        } else {
+            appendLog(`⚠️ Không click được "${targetName}" trong popup`);
+        }
+
+        // Đóng popup
+        const closeBtn = popup.querySelector('button.close, .close, [data-dismiss="modal"], .ui-dialog-titlebar-close');
+        if (closeBtn) {
+            closeBtn.click();
+        } else {
+            document.body.click();
+        }
+        await sleep(CONFIG.DELAY_MS.CLOSE_TREE);
+
+        return clicked;
     };
 
-    // Calculate deadline date: Current Date + Days
-    const calculateDeadlineDate = (days) => {
-        const date = new Date();
-        date.setDate(date.getDate() + parseInt(days));
-        
-        const dd = String(date.getDate()).padStart(2, '0');
-        const mm = String(date.getMonth() + 1).padStart(2, '0');
-        const yyyy = date.getFullYear();
-        
-        return `${dd}/${mm}/${yyyy}`;
-    };
-
-    // Process single document auto-filling
+    // ============================================================
+    // 11. AUTO FILL & SUBMIT CHO 1 VĂN BẢN
+    // ============================================================
     const autoFillAndSubmit = async (docId, aiData) => {
-        // 1. Select the document in left panel
+        // B1: Click vào văn bản ở panel trái
         const itemEl = document.querySelector(`.messageListItem[data-id="${docId}"]`);
-        if (!itemEl) throw new Error("Không tìm thấy mục văn bản trong danh sách panel trái!");
-        
-        itemEl.click();
-        await sleep(CONFIG.DELAY_MS.SELECT_DOC);
-        
-        // Expand hidden details (like signer) if not visible
-        const showMoreBtn = document.querySelector(SELECTORS.SHOW_MORE_BTN);
-        if (showMoreBtn && showMoreBtn.textContent.includes("Hiển thị thêm")) {
+        if (!itemEl) throw new Error(`Không tìm thấy văn bản ID ${docId} ở panel trái`);
+
+        if (!itemEl.classList.contains('selected')) {
+            itemEl.click();
+            appendLog(`📄 Đã chọn VB ID ${docId}`);
+            await sleep(CONFIG.DELAY_MS.SELECT_DOC);
+        } else {
+            appendLog(`📄 VB ID ${docId} đã được chọn`);
+        }
+
+        // B2: Show more fields nếu cần (người ký nằm trong info-more-hidden)
+        const showMoreBtn = document.querySelector(S.SHOW_MORE);
+        if (showMoreBtn && showMoreBtn.textContent.includes('Hiển thị thêm')) {
             showMoreBtn.click();
+            appendLog('🔽 Đã mở rộng trường ẩn');
             await sleep(300);
         }
 
-        // 2. Select register (Sổ văn bản đến)
-        await selectBookDropdown(CONFIG.DEFAULT_BOOK);
-        await sleep(500); // Wait for iDesk calculations & serial number retrieval
+        // B3: Chọn "Sổ văn bản đến" (KHÔNG fill số đến)
+        await selectBook(CONFIG.DEFAULT_BOOK);
 
-        // 3. Click "Lưu và chuyển"
-        const saveTransferBtn = document.querySelector(SELECTORS.SAVE_TRANSFER_BTN);
-        if (!saveTransferBtn) throw new Error("Không tìm thấy nút 'Lưu và chuyển'!");
+        // B4: Đợi nút "Lưu và chuyển" enable
+        const saveTransferBtn = document.querySelector(S.SAVE_TRANSFER_BTN);
+        if (!saveTransferBtn) throw new Error('Không tìm thấy nút "Lưu và chuyển"');
+        if (saveTransferBtn.disabled) {
+            appendLog('⏳ Đợi nút "Lưu và chuyển" enable...');
+            // Đợi tối đa 5s
+            for (let i = 0; i < 10; i++) {
+                await sleep(500);
+                if (!saveTransferBtn.disabled) break;
+            }
+        }
+        if (saveTransferBtn.disabled) {
+            throw new Error('Nút "Lưu và chuyển" không enable sau khi chọn sổ!');
+        }
+
+        // B5: Click "Lưu và chuyển"
         saveTransferBtn.click();
+        appendLog('💾 Đã click "Lưu và chuyển"');
         await sleep(CONFIG.DELAY_MS.CLICK_SAVE_TRANSFER);
 
-        // 4. Fill Xử lý chính
+        // B6: Đợi transfer container xuất hiện
+        const transferContainer = document.querySelector(S.TRANSFER_CONTAINER);
+        if (!transferContainer) {
+            // Retry
+            for (let i = 0; i < 5; i++) {
+                await sleep(500);
+                if (document.querySelector(S.TRANSFER_CONTAINER)) break;
+            }
+        }
+        if (!document.querySelector(S.TRANSFER_CONTAINER)) {
+            throw new Error('Không thấy form "Thông tin xử lý" sau khi click Lưu và chuyển!');
+        }
+        appendLog('📋 Đã mở form Thông tin xử lý');
+
+        // B7: Điền "Xử lý chính"
         if (aiData.don_vi_xu_ly) {
-            await selectNodeInTreePopup(SELECTORS.RESPONSIBLE_LINK, aiData.don_vi_xu_ly);
+            appendLog(`👤 Xử lý chính: ${aiData.don_vi_xu_ly}`);
+            await selectTreeItem(S.RESPONSIBLE_LINK, S.RESPONSIBLE_WRAP, aiData.don_vi_xu_ly);
         }
 
-        // 5. Fill Phối hợp xử lý
+        // B8: Điền "Phối hợp xử lý" (array)
         if (aiData.don_vi_phoi_hop && Array.isArray(aiData.don_vi_phoi_hop)) {
             for (const unit of aiData.don_vi_phoi_hop) {
-                await selectNodeInTreePopup(SELECTORS.PARTICIPANTS_LINK, unit);
-            }
-        }
-
-        // 6. Fill Hạn xử lý = ngày hiện tại + số ngày (thời hạn thực hiện)
-        if (aiData.thoi_han_thuc_hien) {
-            const deadlineDays = parseInt(aiData.thoi_han_thuc_hien);
-            const deadlineDate = calculateDeadlineDate(deadlineDays);
-
-            // Set số ngày TRƯỚC để kích hoạt logic tính toán/validate gốc của iDesk (nếu có)
-            const deadlineNumInput = document.querySelector(SELECTORS.DEADLINE_NUMBER_INPUT);
-            if (deadlineNumInput) {
-                deadlineNumInput.value = deadlineDays;
-                deadlineNumInput.dispatchEvent(new Event('input', { bubbles: true }));
-                deadlineNumInput.dispatchEvent(new Event('change', { bubbles: true }));
-                deadlineNumInput.dispatchEvent(new Event('blur', { bubbles: true }));
-                await sleep(300); // chờ iDesk tự tính (nếu có binding riêng)
-            }
-
-            // Sau đó ÉP LẠI ngày hiển thị đúng công thức "hiện tại + N ngày" mà bạn yêu cầu,
-            // để không phụ thuộc vào việc iDesk có tự tính đúng quy tắc này hay không
-            // (VD: iDesk có thể loại trừ thứ 7/CN, tính theo ngày văn bản thay vì hôm nay, v.v.)
-            const deadlineInput = document.querySelector(SELECTORS.DEADLINE_INPUT);
-            if (deadlineInput) {
-                deadlineInput.value = deadlineDate;
-                deadlineInput.dispatchEvent(new Event('input', { bubbles: true }));
-                deadlineInput.dispatchEvent(new Event('change', { bubbles: true }));
-                deadlineInput.dispatchEvent(new Event('blur', { bubbles: true }));
-
-                if (deadlineInput.value !== deadlineDate) {
-                    console.warn(`[iDesk RPA] Hạn xử lý không set được đúng giá trị mong muốn. Muốn: ${deadlineDate}, thực tế: ${deadlineInput.value}`);
+                if (unit && unit.trim()) {
+                    await selectTreeItem(S.PARTICIPANTS_LINK, S.PARTICIPANTS_WRAP, unit.trim());
+                    await sleep(300); // chờ giữa các lần chọn
                 }
             }
         }
 
-        // 7. Click Đồng ý
-        const agreeBtn = document.querySelector(SELECTORS.AGREE_BTN);
-        if (!agreeBtn) throw new Error("Không tìm thấy nút 'Đồng ý'!");
-        agreeBtn.click();
-        
-        await sleep(CONFIG.DELAY_MS.AFTER_SUBMIT);
-    };
+        // B9: Điền "Hạn xử lý" = hiện tại + số ngày
+        if (aiData.thoi_han_thuc_hien) {
+            const days = parseInt(aiData.thoi_han_thuc_hien);
+            const deadlineDate = calcDeadline(days);
 
-    // 4. FLOATING USER INTERFACE (DASHBOARD)
-    const createDashboardUI = () => {
-        // Avoid duplicate rendering
-        if (document.getElementById('idesk-rpa-hub')) return;
+            // Set số ngày trước
+            const numInput = document.querySelector(S.DEADLINE_NUMBER);
+            if (numInput) {
+                numInput.value = days;
+                numInput.dispatchEvent(new Event('input', { bubbles: true }));
+                numInput.dispatchEvent(new Event('change', { bubbles: true }));
+                await sleep(200);
+            }
 
-        // Inject UI HTML structure
-        const container = document.createElement('div');
-        container.id = 'idesk-rpa-hub';
-        container.innerHTML = `
-            <div class="rpa-header">
-                <div class="rpa-title">
-                    <span class="rpa-logo">⚡</span> iDesk AI RPA Automation Panel
-                </div>
-                <div class="rpa-header-actions">
-                    <button id="rpa-btn-minimize" title="Thu nhỏ/Mở rộng">➖</button>
-                </div>
-            </div>
-            <div class="rpa-body">
-                <div class="rpa-controls-row">
-                    <button class="rpa-btn rpa-btn-blue" id="rpa-btn-scan">🔄 Quét danh sách</button>
-                    <button class="rpa-btn rpa-btn-green" id="rpa-btn-ai-all">🤖 Gửi toàn bộ AI</button>
-                    <button class="rpa-btn rpa-btn-purple" id="rpa-btn-fill-all">⚡ Tự động điền</button>
-                </div>
-                
-                <div class="rpa-collapsible-config">
-                    <div class="rpa-config-header">⚙️ Cấu hình hệ thống</div>
-                    <div class="rpa-config-body">
-                        <div class="rpa-form-group">
-                            <label>AI API Endpoint:</label>
-                            <input type="text" id="rpa-config-api-url" value="${CONFIG.BACKEND_URL}">
-                        </div>
-                        <div class="rpa-form-group">
-                            <label>Sổ văn bản mặc định:</label>
-                            <input type="text" id="rpa-config-default-book" value="${CONFIG.DEFAULT_BOOK}">
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="rpa-table-container">
-                    <table class="rpa-table" id="rpa-doc-table">
-                        <thead>
-                            <tr>
-                                <th style="width: 30px;"><input type="checkbox" id="rpa-th-check-all" checked></th>
-                                <th style="width: 140px;">Văn bản gốc</th>
-                                <th style="width: 100px;">Trạng thái</th>
-                                <th>Thông tin xử lý đề xuất (AI)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td colspan="4" style="text-align: center; color: #8892b0; padding: 20px;">
-                                    Chưa có dữ liệu. Nhấn "Quét danh sách" để tải văn bản.
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            <div class="rpa-footer">
-                <div class="rpa-status-text" id="rpa-footer-status">Hệ thống sẵn sàng.</div>
-                <div class="rpa-version">v1.0</div>
-            </div>
-        `;
-
-        document.body.appendChild(container);
-
-        // Inject Premium Glassmorphism Stylesheet
-        const style = document.createElement('style');
-        style.innerHTML = `
-            #idesk-rpa-hub {
-                position: fixed;
-                bottom: 20px;
-                right: 20px;
-                width: 780px;
-                height: 480px;
-                background: rgba(10, 16, 30, 0.85);
-                backdrop-filter: blur(15px);
-                -webkit-backdrop-filter: blur(15px);
-                border: 1px solid rgba(255, 255, 255, 0.08);
-                border-radius: 14px;
-                box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.5);
-                color: #e2e8f0;
-                font-family: 'Outfit', 'Inter', system-ui, sans-serif;
-                z-index: 99999;
-                display: flex;
-                flex-direction: column;
-                overflow: hidden;
-                transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            // Set ngày
+            const dateInput = document.querySelector(S.DEADLINE_INPUT);
+            if (dateInput) {
+                dateInput.value = deadlineDate;
+                dateInput.dispatchEvent(new Event('input', { bubbles: true }));
+                dateInput.dispatchEvent(new Event('change', { bubbles: true }));
+                dateInput.dispatchEvent(new Event('blur', { bubbles: true }));
+                appendLog(`📅 Hạn xử lý: ${deadlineDate} (hiện tại + ${days} ngày)`);
             }
-            #idesk-rpa-hub.minimized {
-                height: 45px;
-                width: 280px;
-            }
-            .rpa-header {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                padding: 10px 16px;
-                background: rgba(255, 255, 255, 0.03);
-                border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-                cursor: grab;
-            }
-            .rpa-title {
-                font-weight: 600;
-                font-size: 13px;
-                letter-spacing: 0.5px;
-                display: flex;
-                align-items: center;
-                gap: 6px;
-                color: #38bdf8;
-            }
-            .rpa-logo {
-                font-size: 14px;
-                animation: pulse 2s infinite;
-            }
-            .rpa-header-actions button {
-                background: none;
-                border: none;
-                color: #94a3b8;
-                cursor: pointer;
-                padding: 2px 6px;
-                font-size: 11px;
-                transition: color 0.2s;
-            }
-            .rpa-header-actions button:hover {
-                color: #f1f5f9;
-            }
-            .rpa-body {
-                flex: 1;
-                padding: 12px;
-                display: flex;
-                flex-direction: column;
-                gap: 10px;
-                overflow: hidden;
-            }
-            #idesk-rpa-hub.minimized .rpa-body {
-                display: none;
-            }
-            .rpa-controls-row {
-                display: flex;
-                gap: 8px;
-            }
-            .rpa-btn {
-                flex: 1;
-                border: none;
-                border-radius: 8px;
-                padding: 8px 12px;
-                font-weight: 500;
-                font-size: 12px;
-                cursor: pointer;
-                transition: all 0.2s ease;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                gap: 6px;
-            }
-            .rpa-btn-blue {
-                background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
-                color: white;
-                box-shadow: 0 2px 8px rgba(2, 132, 199, 0.3);
-            }
-            .rpa-btn-blue:hover {
-                background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
-                box-shadow: 0 4px 12px rgba(2, 132, 199, 0.4);
-            }
-            .rpa-btn-green {
-                background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
-                color: white;
-                box-shadow: 0 2px 8px rgba(22, 163, 74, 0.3);
-            }
-            .rpa-btn-green:hover {
-                background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
-                box-shadow: 0 4px 12px rgba(22, 163, 74, 0.4);
-            }
-            .rpa-btn-purple {
-                background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
-                color: white;
-                box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3);
-            }
-            .rpa-btn-purple:hover {
-                background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
-                box-shadow: 0 4px 12px rgba(124, 58, 237, 0.4);
-            }
-            .rpa-collapsible-config {
-                border: 1px solid rgba(255, 255, 255, 0.05);
-                border-radius: 8px;
-                background: rgba(255, 255, 255, 0.02);
-            }
-            .rpa-config-header {
-                padding: 6px 12px;
-                font-size: 11px;
-                font-weight: 500;
-                color: #94a3b8;
-                cursor: pointer;
-            }
-            .rpa-config-body {
-                padding: 8px 12px;
-                display: flex;
-                flex-direction: column;
-                gap: 6px;
-                border-top: 1px solid rgba(255, 255, 255, 0.03);
-            }
-            .rpa-form-group {
-                display: flex;
-                align-items: center;
-                gap: 8px;
-            }
-            .rpa-form-group label {
-                font-size: 11px;
-                width: 140px;
-                color: #94a3b8;
-            }
-            .rpa-form-group input {
-                flex: 1;
-                background: rgba(0, 0, 0, 0.2);
-                border: 1px solid rgba(255, 255, 255, 0.08);
-                border-radius: 4px;
-                padding: 3px 6px;
-                color: #e2e8f0;
-                font-size: 11px;
-            }
-            .rpa-table-container {
-                flex: 1;
-                overflow-y: auto;
-                border: 1px solid rgba(255, 255, 255, 0.05);
-                border-radius: 8px;
-                background: rgba(0, 0, 0, 0.15);
-            }
-            .rpa-table {
-                width: 100%;
-                border-collapse: collapse;
-                font-size: 11px;
-                text-align: left;
-            }
-            .rpa-table th, .rpa-table td {
-                padding: 6px 10px;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-            }
-            .rpa-table th {
-                background: rgba(255, 255, 255, 0.02);
-                color: #94a3b8;
-                font-weight: 600;
-                position: sticky;
-                top: 0;
-            }
-            .rpa-doc-info {
-                display: flex;
-                flex-direction: column;
-                gap: 2px;
-            }
-            .rpa-doc-num {
-                font-weight: 600;
-                color: #f1f5f9;
-            }
-            .rpa-doc-subject {
-                color: #94a3b8;
-                white-space: nowrap;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                max-width: 180px;
-            }
-            .rpa-status-badge {
-                display: inline-block;
-                padding: 2px 6px;
-                border-radius: 4px;
-                font-weight: 600;
-                font-size: 10px;
-            }
-            .rpa-status-idle { background: rgba(148, 163, 184, 0.1); color: #94a3b8; }
-            .rpa-status-pending { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
-            .rpa-status-success { background: rgba(16, 185, 129, 0.1); color: #10b981; }
-            .rpa-status-error { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
-            
-            .rpa-ai-fields {
-                display: flex;
-                flex-direction: column;
-                gap: 4px;
-            }
-            .rpa-ai-row {
-                display: flex;
-                align-items: center;
-                gap: 6px;
-            }
-            .rpa-ai-row label {
-                width: 70px;
-                color: #64748b;
-                font-size: 10px;
-            }
-            .rpa-ai-row input {
-                flex: 1;
-                background: rgba(255, 255, 255, 0.03);
-                border: 1px solid rgba(255, 255, 255, 0.05);
-                border-radius: 4px;
-                padding: 2px 4px;
-                color: #f1f5f9;
-                font-size: 10px;
-            }
-            .rpa-ai-row input:focus {
-                border-color: #38bdf8;
-                outline: none;
-            }
-            
-            .rpa-footer {
-                padding: 6px 12px;
-                background: rgba(255, 255, 255, 0.02);
-                border-top: 1px solid rgba(255, 255, 255, 0.05);
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                font-size: 10px;
-                color: #64748b;
-            }
-            #idesk-rpa-hub.minimized .rpa-footer {
-                display: none;
-            }
-            
-            @keyframes pulse {
-                0% { opacity: 0.6; }
-                50% { opacity: 1; }
-                100% { opacity: 0.6; }
-            }
-        `;
-        document.head.appendChild(style);
-
-        // Make floating panel draggable
-        dragElement(container);
-
-        // Bind UI Events
-        document.getElementById('rpa-btn-minimize').addEventListener('click', () => {
-            container.classList.toggle('minimized');
-            document.getElementById('rpa-btn-minimize').textContent = container.classList.contains('minimized') ? '🗖' : '➖';
-        });
-
-        document.getElementById('rpa-btn-scan').addEventListener('click', () => scanList());
-        document.getElementById('rpa-btn-ai-all').addEventListener('click', runAIOnAllSelected);
-        document.getElementById('rpa-btn-fill-all').addEventListener('click', runFillOnAllSelected);
-        document.getElementById('rpa-th-check-all').addEventListener('change', (e) => {
-            const checked = e.target.checked;
-            document.querySelectorAll('.rpa-td-check').forEach(chk => chk.checked = checked);
-        });
-
-        // Config event listeners
-        document.getElementById('rpa-config-api-url').addEventListener('change', (e) => {
-            CONFIG.BACKEND_URL = e.target.value;
-        });
-        document.getElementById('rpa-config-default-book').addEventListener('change', (e) => {
-            CONFIG.DEFAULT_BOOK = e.target.value;
-        });
-    };
-
-    // Update footer status text
-    const setStatus = (msg) => {
-        const el = document.getElementById('rpa-footer-status');
-        if (el) el.textContent = msg;
-    };
-
-    // Lấy danh sách item đang thực sự hiển thị trên màn hình (loại bỏ item từ các
-    // widget khác đang bị ẩn display:none nhưng vẫn còn trong DOM do iDesk cache lại).
-    // offsetParent === null nghĩa là phần tử (hoặc cha của nó) đang display:none.
-    const queryVisibleListItems = () => {
-        // Ưu tiên selector cụ thể trước (đúng ngữ cảnh hơn), fallback sang class chung toàn trang
-        let items = Array.from(document.querySelectorAll(SELECTORS.LEFT_PANEL_ITEMS));
-        if (items.length === 0) {
-            items = Array.from(document.querySelectorAll(SELECTORS.LEFT_PANEL_ITEMS_FALLBACK));
         }
-        return items.filter(el => el.offsetParent !== null);
+
+        // B10: Click "Đồng ý"
+        const agreeBtn = document.querySelector(S.AGREE_BTN);
+        if (!agreeBtn) throw new Error('Không tìm thấy nút "Đồng ý"!');
+        if (agreeBtn.disabled) {
+            appendLog('⏳ Đợi nút "Đồng ý" enable...');
+            for (let i = 0; i < 5; i++) {
+                await sleep(500);
+                if (!agreeBtn.disabled) break;
+            }
+        }
+        agreeBtn.click();
+        appendLog('✅ Đã click "Đồng ý"');
+        await sleep(CONFIG.DELAY_MS.AFTER_SUBMIT);
+
+        return true;
     };
 
-    // Scrape documents from left list panel DOM.
-    // Có retry vì list được nạp bằng AJAX (qrreceiving.cpx) - nếu gọi quá sớm lúc SPA
-    // chưa kịp render xong (chuyển tab, mới load trang...) sẽ ra 0 kết quả.
+    // ============================================================
+    // 12. SCAN DANH SÁCH VĂN BẢN TỪ DOM
+    // ============================================================
     const scanList = async (retries = 3) => {
-        setStatus("Đang quét danh sách văn bản...");
-        let items = queryVisibleListItems();
+        setStatus('🔍 Đang quét danh sách văn bản...');
 
+        let items = getVisibleItems();
         let attempt = 0;
         while (items.length === 0 && attempt < retries) {
             attempt++;
-            setStatus(`Chưa thấy văn bản, thử lại lần ${attempt}/${retries}...`);
-            await sleep(800);
-            items = queryVisibleListItems();
+            setStatus(`⏳ Chờ danh sách (lần ${attempt}/${retries})...`);
+            await sleep(1000);
+            items = getVisibleItems();
         }
 
         if (items.length === 0) {
-            setStatus("Không tìm thấy văn bản nào ở panel trái. Hãy chắc chắn đang ở màn hình 'Tiếp nhận văn bản' rồi thử lại!");
+            setStatus('⚠️ Không tìm thấy văn bản. Đã ở màn hình "Tiếp nhận văn bản"?');
             return 0;
         }
 
+        let newCount = 0;
         items.forEach(el => {
             const id = el.getAttribute('data-id');
-            if (id) {
-                // If not in cache, initialize placeholder
-                if (!docCache.has(id)) {
-                    const sender = el.querySelector('.sender')?.textContent.trim() || '';
-                    const subject = el.querySelector('.subject')?.textContent.trim() || '';
-                    docCache.set(id, {
-                        id: id,
-                        signNumber: sender,
-                        subject: subject,
-                        status: 'idle',
-                        aiData: null
-                    });
-                }
+            if (id && !docCache.has(id)) {
+                const sender = el.querySelector('.sender')?.textContent?.trim() || '';
+                const subject = el.querySelector('.subject')?.textContent?.trim() || '';
+                docCache.set(id, {
+                    id,
+                    signNumber: sender,
+                    subject,
+                    status: 'idle',
+                    aiData: null,
+                    attachments: [],
+                    creatorAcode: ''
+                });
+                newCount++;
             }
         });
 
-        updateDashboardTable();
-        setStatus(`Đã quét xong. Tìm thấy ${docCache.size} văn bản.`);
+        updateDashboard();
+        setStatus(`📋 Đã quét: ${docCache.size} VB (${newCount} mới)`);
+        appendLog(`📋 Quét xong: ${docCache.size} văn bản trong danh sách`);
         return items.length;
     };
 
-    // Tự động quét lại mỗi khi nội dung panel trái thay đổi (đổi tab Tất cả/Nhận trong
-    // ngày/Chưa vào sổ, phân trang, nạp thêm dữ liệu...) thay vì phải bấm tay liên tục.
-    let scanDebounceTimer = null;
+    // ============================================================
+    // 13. AUTO-OBSERVE LIST CHANGES
+    // ============================================================
     const observeListChanges = () => {
-        const debouncedScan = () => {
-            clearTimeout(scanDebounceTimer);
-            scanDebounceTimer = setTimeout(() => scanList(1), 600);
+        let debounceTimer = null;
+        const handler = () => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                if (!isProcessing) scanList(1);
+            }, 800);
         };
 
-        const observer = new MutationObserver(debouncedScan);
-        observer.observe(document.body, { childList: true, subtree: true });
-        return observer;
+        if (scanObserver) scanObserver.disconnect();
+        scanObserver = new MutationObserver(handler);
+
+        // Observe left panel + body
+        const listContainer = document.querySelector('#listview-list-content');
+        if (listContainer) {
+            scanObserver.observe(listContainer, { childList: true, subtree: true });
+        }
+        scanObserver.observe(document.body, { childList: true, subtree: true });
+
+        appendLog('👀 Đã bật tự động quét khi danh sách thay đổi');
     };
 
-    // Repopulate UI Table with cached documents
-    const updateDashboardTable = () => {
-        const tbody = document.querySelector('#rpa-doc-table tbody');
-        if (!tbody) return;
+    // ============================================================
+    // 14. UI DASHBOARD
+    // ============================================================
+    const createDashboard = () => {
+        if (document.getElementById('idesk-rpa-hub')) return;
 
-        if (docCache.size === 0) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="4" style="text-align: center; color: #8892b0; padding: 20px;">
-                        Chưa có dữ liệu. Nhấn "Quét danh sách" để tải văn bản.
-                    </td>
-                </tr>
-            `;
-            return;
-        }
-
-        let html = '';
-        docCache.forEach((doc, id) => {
-            const statusClass = doc.status === 'idle' ? 'rpa-status-idle' :
-                                doc.status === 'pending' ? 'rpa-status-pending' :
-                                doc.status === 'success' ? 'rpa-status-success' : 'rpa-status-error';
+        // CSS dùng GM_addStyle
+        GM_addStyle(`
+            /* ===== iDesk RPA Dashboard v2.0 ===== */
+            #idesk-rpa-hub {
+                position: fixed !important;
+                bottom: 20px !important;
+                right: 20px !important;
+                width: 820px !important;
+                height: 520px !important;
+                background: rgba(15, 23, 42, 0.92) !important;
+                backdrop-filter: blur(20px) !important;
+                -webkit-backdrop-filter: blur(20px) !important;
+                border: 1px solid rgba(148, 163, 184, 0.15) !important;
+                border-radius: 16px !important;
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255,255,255,0.03) !important;
+                color: #e2e8f0 !important;
+                font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif !important;
+                z-index: 999999 !important;
+                display: flex !important;
+                flex-direction: column !important;
+                overflow: hidden !important;
+                font-size: 13px !important;
+                line-height: 1.4 !important;
+                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                user-select: none !important;
+            }
+            #idesk-rpa-hub * {
+                box-sizing: border-box !important;
+            }
+            #idesk-rpa-hub.minimized {
+                width: 320px !important;
+                height: 44px !important;
+                border-radius: 22px !important;
+                cursor: pointer !important;
+            }
+            #idesk-rpa-hub.minimized .rpa-body,
+            #idesk-rpa-hub.minimized .rpa-footer {
+                display: none !important;
+            }
+            .rpa-header {
+                display: flex !important;
+                justify-content: space-between !important;
+                align-items: center !important;
+                padding: 10px 16px !important;
+                background: rgba(255,255,255,0.03) !important;
+                border-bottom: 1px solid rgba(255,255,255,0.06) !important;
+                cursor: grab !important;
+                flex-shrink: 0 !important;
+                min-height: 44px !important;
+            }
+            .rpa-header:active { cursor: grabbing !important; }
+            .rpa-title {
+                font-weight: 700 !important;
+                font-size: 14px !important;
+                display: flex !important;
+                align-items: center !important;
+                gap: 8px !important;
+                color: #38bdf8 !important;
+                letter-spacing: 0.3px !important;
+            }
+            .rpa-title .badge-count {
+                background: rgba(56, 189, 248, 0.15) !important;
+                color: #7dd3fc !important;
+                font-size: 11px !important;
+                padding: 1px 8px !important;
+                border-radius: 10px !important;
+                font-weight: 600 !important;
+            }
+            .rpa-header-actions {
+                display: flex !important;
+                gap: 6px !important;
+            }
+            .rpa-header-actions button {
+                background: rgba(255,255,255,0.05) !important;
+                border: none !important;
+                color: #94a3b8 !important;
+                cursor: pointer !important;
+                padding: 4px 8px !important;
+                border-radius: 6px !important;
+                font-size: 12px !important;
+                transition: all 0.15s !important;
+                line-height: 1 !important;
+            }
+            .rpa-header-actions button:hover {
+                background: rgba(255,255,255,0.1) !important;
+                color: #f1f5f9 !important;
+            }
+            .rpa-body {
+                flex: 1 !important;
+                padding: 12px !important;
+                display: flex !important;
+                flex-direction: column !important;
+                gap: 8px !important;
+                overflow: hidden !important;
+            }
+            .rpa-toolbar {
+                display: flex !important;
+                gap: 6px !important;
+                flex-shrink: 0 !important;
+                flex-wrap: wrap !important;
+            }
+            .rpa-btn {
+                border: none !important;
+                border-radius: 8px !important;
+                padding: 7px 14px !important;
+                font-weight: 600 !important;
+                font-size: 12px !important;
+                cursor: pointer !important;
+                display: inline-flex !important;
+                align-items: center !important;
+                gap: 6px !important;
+                transition: all 0.15s !important;
+                white-space: nowrap !important;
+            }
+            .rpa-btn:active { transform: scale(0.97) !important; }
+            .rpa-btn-primary { background: #0284c7 !important; color: #fff !important; }
+            .rpa-btn-primary:hover { background: #0ea5e9 !important; }
+            .rpa-btn-success { background: #16a34a !important; color: #fff !important; }
+            .rpa-btn-success:hover { background: #22c55e !important; }
+            .rpa-btn-warning { background: #d97706 !important; color: #fff !important; }
+            .rpa-btn-warning:hover { background: #f59e0b !important; }
+            .rpa-btn-danger { background: #dc2626 !important; color: #fff !important; }
+            .rpa-btn-danger:hover { background: #ef4444 !important; }
+            .rpa-btn-purple { background: #7c3aed !important; color: #fff !important; }
+            .rpa-btn-purple:hover { background: #8b5cf6 !important; }
+            .rpa-btn-sm { padding: 4px 10px !important; font-size: 11px !important; }
+            .rpa-btn-outline {
+                background: transparent !important;
+                border: 1px solid rgba(148,163,184,0.3) !important;
+                color: #94a3b8 !important;
+            }
+            .rpa-btn-outline:hover { border-color: #38bdf8 !important; color: #38bdf8 !important; }
             
-            const statusText = doc.status === 'idle' ? 'Chưa gửi' :
-                               doc.status === 'pending' ? 'Đang xử lý...' :
-                               doc.status === 'success' ? 'Đã phân tích' : 'Lỗi: ' + (doc.errorMsg || 'Thất bại');
+            .rpa-table-wrap {
+                flex: 1 !important;
+                overflow-y: auto !important;
+                border: 1px solid rgba(255,255,255,0.06) !important;
+                border-radius: 10px !important;
+                background: rgba(0,0,0,0.15) !important;
+                min-height: 0 !important;
+            }
+            .rpa-table-wrap::-webkit-scrollbar { width: 6px !important; }
+            .rpa-table-wrap::-webkit-scrollbar-track { background: transparent !important; }
+            .rpa-table-wrap::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.2) !important; border-radius: 3px !important; }
+            
+            .rpa-table {
+                width: 100% !important;
+                border-collapse: collapse !important;
+                font-size: 12px !important;
+                text-align: left !important;
+            }
+            .rpa-table th {
+                background: rgba(255,255,255,0.02) !important;
+                color: #94a3b8 !important;
+                font-weight: 600 !important;
+                padding: 6px 6px !important;
+                position: sticky !important;
+                top: 0 !important;
+                z-index: 1 !important;
+                border-bottom: 1px solid rgba(255,255,255,0.06) !important;
+                font-size: 10px !important;
+                text-transform: uppercase !important;
+                letter-spacing: 0.3px !important;
+                white-space: nowrap !important;
+            }
+            .rpa-table td {
+                padding: 5px 6px !important;
+                border-bottom: 1px solid rgba(255,255,255,0.03) !important;
+                vertical-align: middle !important;
+                font-size: 11px !important;
+            }
+            .rpa-table tr:hover td {
+                background: rgba(255,255,255,0.02) !important;
+            }
+            .rpa-table tr.rpa-row-processing td {
+                background: rgba(124, 58, 237, 0.08) !important;
+            }
+            .rpa-table tr.rpa-row-done td {
+                background: rgba(16, 185, 129, 0.06) !important;
+            }
+            .rpa-table tr.rpa-row-error td {
+                background: rgba(239, 68, 68, 0.06) !important;
+            }
+            
+            .rpa-doc-cell {
+                max-width: 120px !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+                white-space: nowrap !important;
+                line-height: 1.3 !important;
+            }
+            .rpa-doc-cell-title {
+                font-weight: 600 !important;
+                color: #f1f5f9 !important;
+                font-size: 11px !important;
+            }
+            .rpa-doc-cell-sub {
+                color: #94a3b8 !important;
+                font-size: 10px !important;
+            }
+            
+            .rpa-badge {
+                display: inline-block !important;
+                padding: 2px 6px !important;
+                border-radius: 12px !important;
+                font-weight: 600 !important;
+                font-size: 9px !important;
+                letter-spacing: 0.3px !important;
+            }
+            .rpa-badge-idle { background: rgba(148,163,184,0.12) !important; color: #94a3b8 !important; }
+            .rpa-badge-pending { background: rgba(245,158,11,0.15) !important; color: #fbbf24 !important; }
+            .rpa-badge-success { background: rgba(16,185,129,0.15) !important; color: #34d399 !important; }
+            .rpa-badge-error { background: rgba(239,68,68,0.15) !important; color: #f87171 !important; }
+            .rpa-badge-sent { background: rgba(99,102,241,0.15) !important; color: #818cf8 !important; }
+            
+            .rpa-subject-preview {
+                max-width: 200px !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+                white-space: nowrap !important;
+                color: #cbd5e1 !important;
+                font-size: 10px !important;
+            }
 
-            // Set up editable AI values or default strings
-            const ai = doc.aiData || {
-                tom_tat: doc.subject || '',
-                don_vi_xu_ly: '',
-                don_vi_phoi_hop: [],
-                thoi_han_thuc_hien: ''
-            };
+            .rpa-badge-idle { background: rgba(148,163,184,0.12) !important; color: #94a3b8 !important; }
+            .rpa-badge-pending { background: rgba(245,158,11,0.15) !important; color: #fbbf24 !important; }
+            .rpa-badge-success { background: rgba(16,185,129,0.15) !important; color: #34d399 !important; }
+            .rpa-badge-error { background: rgba(239,68,68,0.15) !important; color: #f87171 !important; }
+            .rpa-badge-sent { background: rgba(99,102,241,0.15) !important; color: #818cf8 !important; }
+            
+            .rpa-ai-fields {
+                display: flex !important;
+                flex-direction: column !important;
+                gap: 3px !important;
+            }
+            .rpa-ai-field {
+                display: flex !important;
+                align-items: center !important;
+                gap: 4px !important;
+            }
+            .rpa-ai-field label {
+                color: #64748b !important;
+                font-size: 10px !important;
+                min-width: 65px !important;
+                flex-shrink: 0 !important;
+            }
+            .rpa-ai-field input, .rpa-ai-field textarea {
+                background: rgba(255,255,255,0.04) !important;
+                border: 1px solid rgba(255,255,255,0.06) !important;
+                border-radius: 4px !important;
+                padding: 2px 6px !important;
+                color: #e2e8f0 !important;
+                font-size: 11px !important;
+                font-family: inherit !important;
+                width: 100% !important;
+                min-width: 0 !important;
+            }
+            .rpa-ai-field input:focus, .rpa-ai-field textarea:focus {
+                border-color: #38bdf8 !important;
+                outline: none !important;
+                box-shadow: 0 0 0 2px rgba(56,189,248,0.1) !important;
+            }
+            
+            .rpa-footer {
+                display: flex !important;
+                justify-content: space-between !important;
+                align-items: center !important;
+                padding: 6px 12px !important;
+                background: rgba(255,255,255,0.02) !important;
+                border-top: 1px solid rgba(255,255,255,0.05) !important;
+                flex-shrink: 0 !important;
+                gap: 8px !important;
+            }
+            .rpa-status-text {
+                font-size: 11px !important;
+                color: #94a3b8 !important;
+                flex: 1 !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+                white-space: nowrap !important;
+            }
+            .rpa-version {
+                font-size: 10px !important;
+                color: #475569 !important;
+                flex-shrink: 0 !important;
+            }
+            .rpa-progress-wrap {
+                display: flex !important;
+                align-items: center !important;
+                gap: 8px !important;
+                flex-shrink: 0 !important;
+            }
+            .rpa-progress-bar {
+                width: 100px !important;
+                height: 4px !important;
+                background: rgba(255,255,255,0.06) !important;
+                border-radius: 2px !important;
+                overflow: hidden !important;
+            }
+            .rpa-progress-fill {
+                height: 100% !important;
+                background: linear-gradient(90deg, #38bdf8, #818cf8) !important;
+                border-radius: 2px !important;
+                transition: width 0.3s !important;
+                width: 0% !important;
+            }
+            .rpa-progress-text {
+                font-size: 11px !important;
+                color: #94a3b8 !important;
+                min-width: 50px !important;
+                text-align: right !important;
+            }
+            
+            /* Log panel (collapsible) */
+            .rpa-log-toggle {
+                color: #64748b !important;
+                cursor: pointer !important;
+                font-size: 11px !important;
+                padding: 2px 6px !important;
+                border-radius: 4px !important;
+            }
+            .rpa-log-toggle:hover {
+                background: rgba(255,255,255,0.05) !important;
+                color: #94a3b8 !important;
+            }
+            .rpa-log-panel {
+                max-height: 0 !important;
+                overflow-y: auto !important;
+                transition: max-height 0.3s !important;
+                background: rgba(0,0,0,0.2) !important;
+                border-radius: 8px !important;
+                flex-shrink: 0 !important;
+            }
+            .rpa-log-panel.open {
+                max-height: 120px !important;
+                padding: 6px 8px !important;
+                margin-top: 4px !important;
+            }
+            .rpa-log-panel::-webkit-scrollbar { width: 4px !important; }
+            .rpa-log-panel::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.2) !important; border-radius: 2px !important; }
+            .rpa-log-entry {
+                font-size: 10px !important;
+                color: #94a3b8 !important;
+                padding: 1px 0 !important;
+                line-height: 1.6 !important;
+                border-bottom: 1px solid rgba(255,255,255,0.02) !important;
+                font-family: 'JetBrains Mono', 'Fira Code', monospace !important;
+            }
+            .rpa-log-entry:last-child { border-bottom: none !important; }
+            .rpa-log-time { color: #475569 !important; margin-right: 4px !important; }
+        `);
 
-            const phoiHopStr = Array.isArray(ai.don_vi_phoi_hop) ? ai.don_vi_phoi_hop.join(', ') : (ai.don_vi_phoi_hop || '');
+        // HTML
+        const hub = document.createElement('div');
+        hub.id = 'idesk-rpa-hub';
+        hub.innerHTML = `
+            <div class="rpa-header">
+                <div class="rpa-title">
+                    ⚡ iDesk RPA <span class="badge-count" id="rpa-doc-count">0</span>
+                </div>
+                <div class="rpa-header-actions">
+                    <button id="rpa-btn-toggle-log" title="Log">📋</button>
+                    <button id="rpa-btn-minimize" title="Thu nhỏ">➖</button>
+                </div>
+            </div>
+            <div class="rpa-body">
+                <div class="rpa-toolbar">
+                    <button class="rpa-btn rpa-btn-primary" id="rpa-btn-scan">🔄 Quét</button>
+                    <button class="rpa-btn rpa-btn-success" id="rpa-btn-ai-all">🤖 Gửi AI tất cả</button>
+                    <button class="rpa-btn rpa-btn-purple" id="rpa-btn-fill-all">⚡ Tự động điền</button>
+                    <button class="rpa-btn rpa-btn-sm rpa-btn-outline" id="rpa-btn-select-all">☑ Chọn/Bỏ</button>
+                    <div style="flex:1"></div>
+                    <span style="font-size:11px;color:#64748b;" id="rpa-config-display">⚙️</span>
+                </div>
+                <div class="rpa-table-wrap">
+                    <table class="rpa-table" id="rpa-doc-table">
+                        <thead>
+                            <tr>
+                                <th style="width:24px;"><input type="checkbox" id="rpa-check-all" checked></th>
+                                <th style="width:70px;">Số hiệu</th>
+                                <th style="width:60px;">Loại VB</th>
+                                <th style="width:80px;">CQ Ban hành</th>
+                                <th style="width:65px;">Ngày VB</th>
+                                <th style="width:65px;">Người ký</th>
+                                <th>Trích yếu</th>
+                                <th style="width:70px;">Trạng thái</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td colspan="8" style="text-align:center;color:#64748b;padding:30px;">⟳ Nhấn "Quét" để tải danh sách văn bản...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
 
-            html += `
-                <tr data-id="${id}">
-                    <td><input type="checkbox" class="rpa-td-check" checked data-id="${id}"></td>
-                    <td>
-                        <div class="rpa-doc-info">
-                            <span class="rpa-doc-num" title="${doc.signNumber || 'Không số'}">${doc.signNumber || 'Chưa vào số'}</span>
-                            <span class="rpa-doc-subject" title="${doc.subject}">${doc.subject}</span>
-                        </div>
-                    </td>
-                    <td><span class="rpa-status-badge ${statusClass}">${statusText}</span></td>
-                    <td>
-                        <div class="rpa-ai-fields">
-                            <div class="rpa-ai-row">
-                                <label>Tóm tắt:</label>
-                                <input type="text" class="rpa-ai-tom-tat" value="${ai.tom_tat}" data-id="${id}">
-                            </div>
-                            <div class="rpa-ai-row">
-                                <label>Xử lý chính:</label>
-                                <input type="text" class="rpa-ai-xu-ly" value="${ai.don_vi_xu_ly}" data-id="${id}">
-                            </div>
-                            <div class="rpa-ai-row">
-                                <label>Phối hợp:</label>
-                                <input type="text" class="rpa-ai-phoi-hop" value="${phoiHopStr}" data-id="${id}">
-                            </div>
-                            <div class="rpa-ai-row">
-                                <label>Hạn xử lý (ngày):</label>
-                                <input type="number" class="rpa-ai-deadline" value="${ai.thoi_han_thuc_hien}" data-id="${id}" style="max-width: 80px;">
-                            </div>
-                        </div>
-                    </td>
-                </tr>
-            `;
+                <div class="rpa-log-panel" id="rpa-log-panel">
+                    <div id="rpa-log-body"></div>
+                </div>
+            </div>
+            <div class="rpa-footer">
+                <span class="rpa-status-text" id="rpa-footer-status">Sẵn sàng. Nhấn Quét để bắt đầu.</span>
+                <div class="rpa-progress-wrap">
+                    <span class="rpa-progress-text" id="rpa-progress-text">0/0</span>
+                    <div class="rpa-progress-bar"><div class="rpa-progress-fill" id="rpa-progress-fill"></div></div>
+                </div>
+                <span class="rpa-version">v2.0</span>
+            </div>
+        `;
+        document.body.appendChild(hub);
+        logPanel = document.getElementById('rpa-log-panel');
+
+        // Drag
+        makeDraggable(hub);
+
+        // Events
+        document.getElementById('rpa-btn-minimize').addEventListener('click', () => {
+            hub.classList.toggle('minimized');
+        });
+        document.getElementById('rpa-btn-toggle-log').addEventListener('click', () => {
+            logPanel.classList.toggle('open');
+        });
+        document.getElementById('rpa-btn-scan').addEventListener('click', () => scanList(5));
+        document.getElementById('rpa-btn-ai-all').addEventListener('click', runAIOnAll);
+        document.getElementById('rpa-btn-fill-all').addEventListener('click', runFillOnAll);
+        document.getElementById('rpa-check-all').addEventListener('change', (e) => {
+            document.querySelectorAll('.rpa-row-check').forEach(cb => cb.checked = e.target.checked);
+        });
+        document.getElementById('rpa-btn-select-all').addEventListener('click', () => {
+            const allCb = document.getElementById('rpa-check-all');
+            allCb.checked = !allCb.checked;
+            allCb.dispatchEvent(new Event('change'));
         });
 
-        tbody.innerHTML = html;
-        
-        // Add event listeners to input changes to save user corrections back to cache
-        tbody.querySelectorAll('input').forEach(input => {
-            input.addEventListener('change', (e) => {
-                const id = e.target.getAttribute('data-id');
-                const doc = docCache.get(id);
-                if (!doc) return;
-                
-                if (!doc.aiData) doc.aiData = {};
-
-                if (e.target.classList.contains('rpa-ai-tom-tat')) {
-                    doc.aiData.tom_tat = e.target.value;
-                } else if (e.target.classList.contains('rpa-ai-xu-ly')) {
-                    doc.aiData.don_vi_xu_ly = e.target.value;
-                } else if (e.target.classList.contains('rpa-ai-phoi-hop')) {
-                    doc.aiData.don_vi_phoi_hop = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
-                } else if (e.target.classList.contains('rpa-ai-deadline')) {
-                    doc.aiData.thoi_han_thuc_hien = e.target.value;
-                }
-            });
-        });
+        appendLog('🚀 iDesk RPA v2.0 khởi tạo thành công');
     };
 
-    // Send selected docs to local AI Backend in parallel/sequence
-    const runAIOnAllSelected = async () => {
-        const checkboxes = document.querySelectorAll('.rpa-td-check:checked');
-        if (checkboxes.length === 0) {
-            alert("Hãy chọn ít nhất 1 văn bản!");
-            return;
-        }
-
-        setStatus("Bắt đầu xử lý AI...");
-        
-        for (const chk of checkboxes) {
-            const id = chk.getAttribute('data-id');
-            const doc = docCache.get(id);
-            if (!doc) continue;
-
-            doc.status = 'pending';
-            updateDashboardTable();
-            setStatus(`Đang phân tích: ${doc.signNumber || id}...`);
-
-            try {
-                // Fetch full details (AJAX view) if not loaded
-                const fullDoc = await getOrFetchDocDetails(id);
-                
-                // Call AI server
-                const aiResult = await callAIBackend(fullDoc);
-                
-                doc.status = 'success';
-                doc.aiData = aiResult;
-            } catch (err) {
-                console.error(err);
-                doc.status = 'error';
-                doc.errorMsg = err.message;
-            }
-            updateDashboardTable();
-        }
-        setStatus("Đã hoàn tất phân tích AI cho các văn bản chọn.");
-    };
-
-    // Auto fill and submit selected documents sequentially
-    const runFillOnAllSelected = async () => {
-        const checkboxes = document.querySelectorAll('.rpa-td-check:checked');
-        if (checkboxes.length === 0) {
-            alert("Hãy chọn ít nhất 1 văn bản!");
-            return;
-        }
-
-        if (isProcessingQueue) {
-            alert("Hệ thống đang chạy tiến trình tự động điền!");
-            return;
-        }
-
-        const confirmStart = confirm(`Bạn có chắc chắn muốn TỰ ĐỘNG ĐIỀN và gửi ${checkboxes.length} văn bản đã chọn?`);
-        if (!confirmStart) return;
-
-        isProcessingQueue = true;
-        setStatus("Bắt đầu chu trình tự động điền...");
-
-        for (const chk of checkboxes) {
-            const id = chk.getAttribute('data-id');
-            const doc = docCache.get(id);
-            if (!doc || !doc.aiData) {
-                console.warn(`Bỏ qua văn bản ${id} vì chưa có dữ liệu AI.`);
-                continue;
-            }
-
-            setStatus(`Đang tự động điền: ${doc.signNumber || id}...`);
-            chk.closest('tr').style.backgroundColor = 'rgba(124, 58, 237, 0.15)'; // highlight running row
-
-            try {
-                await autoFillAndSubmit(id, doc.aiData);
-                
-                // Mark success
-                doc.status = 'success';
-                doc.processed = true;
-                chk.closest('tr').style.backgroundColor = 'rgba(16, 185, 129, 0.15)';
-                chk.checked = false; // Uncheck processed item
-            } catch (err) {
-                console.error("Auto-fill error for doc:", id, err);
-                doc.status = 'error';
-                doc.errorMsg = "Lỗi điền: " + err.message;
-                chk.closest('tr').style.backgroundColor = 'rgba(239, 68, 68, 0.15)';
-            }
-            updateDashboardTable();
-        }
-        
-        isProcessingQueue = false;
-        setStatus("Chu trình điền tự động kết thúc.");
-    };
-
-    // Drag helper for floating dashboard panel.
-    // Dùng Pointer Events + setPointerCapture thay vì mousedown/mousemove trên document:
-    // trang iDesk có nhúng iframe (khung xem PDF file đính kèm, các dropdown/select2...),
-    // nếu chỉ nghe mousemove trên document thì khi con trỏ rê ngang qua iframe, sự kiện
-    // sẽ bị "nuốt" bởi document riêng của iframe đó, làm việc kéo bị đứng/giật rất khó chịu.
-    // setPointerCapture đảm bảo MỌI sự kiện con trỏ tiếp theo được gửi thẳng về header
-    // bất kể đang đè lên phần tử/iframe nào, tới khi pointerup.
-    const dragElement = (elmnt) => {
-        const header = elmnt.querySelector('.rpa-header') || elmnt;
-        let startX = 0, startY = 0, startTop = 0, startLeft = 0, dragging = false;
-
-        header.style.touchAction = 'none'; // tránh cuộn trang trên trackpad/touch khi đang kéo
+    // ============================================================
+    // 15. DRAG
+    // ============================================================
+    const makeDraggable = (elmnt) => {
+        const header = elmnt.querySelector('.rpa-header');
+        let startX, startY, startTop, startLeft, dragging = false;
 
         header.addEventListener('pointerdown', (e) => {
-            // Chỉ kéo bằng chuột trái, và không kéo khi bấm đúng vào nút bên trong header
             if (e.button !== 0 || e.target.closest('button')) return;
-
             dragging = true;
             startX = e.clientX;
             startY = e.clientY;
             const rect = elmnt.getBoundingClientRect();
             startTop = rect.top;
             startLeft = rect.left;
-
-            // Chốt vị trí hiện tại bằng top/left rồi bỏ neo bottom/right,
-            // để tính toán khi kéo không bị lệch do đổi hệ quy chiếu giữa chừng.
             elmnt.style.top = startTop + 'px';
             elmnt.style.left = startLeft + 'px';
             elmnt.style.bottom = 'auto';
             elmnt.style.right = 'auto';
-
             header.setPointerCapture(e.pointerId);
             header.style.cursor = 'grabbing';
-            document.body.style.userSelect = 'none'; // tránh bôi đen chữ khi rê nhanh
             e.preventDefault();
         });
 
@@ -1084,46 +1260,270 @@
             if (!dragging) return;
             const dx = e.clientX - startX;
             const dy = e.clientY - startY;
-
-            // Giới hạn không cho kéo panel ra hẳn ngoài màn hình
-            const maxLeft = window.innerWidth - 60;
-            const maxTop = window.innerHeight - 40;
-            const newLeft = Math.min(Math.max(startLeft + dx, -elmnt.offsetWidth + 60), maxLeft);
-            const newTop = Math.min(Math.max(startTop + dy, 0), maxTop);
-
-            elmnt.style.left = newLeft + 'px';
-            elmnt.style.top = newTop + 'px';
+            elmnt.style.left = Math.min(Math.max(startLeft + dx, -elmnt.offsetWidth + 80), window.innerWidth - 60) + 'px';
+            elmnt.style.top = Math.min(Math.max(startTop + dy, 0), window.innerHeight - 50) + 'px';
         });
 
-        const stopDrag = (e) => {
+        const stop = (e) => {
             if (!dragging) return;
             dragging = false;
             header.style.cursor = 'grab';
-            document.body.style.userSelect = '';
             try { header.releasePointerCapture(e.pointerId); } catch (err) {}
         };
-
-        header.addEventListener('pointerup', stopDrag);
-        header.addEventListener('pointercancel', stopDrag);
+        header.addEventListener('pointerup', stop);
+        header.addEventListener('pointercancel', stop);
     };
 
-    // 5. INITIALIZATION
+    // ============================================================
+    // 16. UPDATE DASHBOARD TABLE
+    // ============================================================
+    const updateDashboard = () => {
+        const tbody = document.querySelector('#rpa-doc-table tbody');
+        if (!tbody) return;
+
+        const countEl = document.getElementById('rpa-doc-count');
+        if (countEl) countEl.textContent = docCache.size.toString();
+
+        if (docCache.size === 0) {
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:#64748b;padding:30px;">⟳ Nhấn "Quét" để tải danh sách văn bản...</td></tr>`;
+            return;
+        }
+
+        let html = '';
+        docCache.forEach((doc, id) => {
+            const statusMap = {
+                'idle': ['rpa-badge-idle', '🔵 Chưa gửi AI'],
+                'pending': ['rpa-badge-pending', '🟡 Đang gửi AI...'],
+                'ai_done': ['rpa-badge-success', '✅ Đã phân tích'],
+                'ai_error': ['rpa-badge-error', '❌ Lỗi AI'],
+                'fill_done': ['rpa-badge-sent', '💜 Đã điền'],
+                'fill_error': ['rpa-badge-error', '❌ Lỗi điền'],
+            };
+            const s = statusMap[doc.status] || statusMap.idle;
+            const rowClass = doc.status === 'pending' ? 'rpa-row-processing' :
+                             doc.status === 'ai_done' || doc.status === 'fill_done' ? 'rpa-row-done' :
+                             doc.status === 'ai_error' || doc.status === 'fill_error' ? 'rpa-row-error' : '';
+
+            // Format các trường, fallback cho giá trị trống
+            const signNumber = doc.signNumber || '---';
+            const category = doc.category || '---';
+            const author = doc.author || '---';
+            const docDate = doc.docDateStr || '---';
+            const signer = doc.signer || '---';
+            const subject = doc.subject || '';
+
+            html += `
+                <tr data-id="${id}" class="${rowClass}">
+                    <td><input type="checkbox" class="rpa-row-check" data-id="${id}" ${doc.status === 'fill_done' ? '' : 'checked'}></td>
+                    <td><div class="rpa-doc-cell rpa-doc-cell-title" title="${signNumber}">${signNumber}</div></td>
+                    <td><div class="rpa-doc-cell" title="${category}">${category}</div></td>
+                    <td><div class="rpa-doc-cell" title="${author}">${author}</div></td>
+                    <td><div class="rpa-doc-cell" title="${docDate}">${docDate}</div></td>
+                    <td><div class="rpa-doc-cell" title="${signer}">${signer}</div></td>
+                    <td><div class="rpa-subject-preview" title="${subject}">${subject.substring(0, 80)}${subject.length > 80 ? '...' : ''}</div></td>
+                    <td><span class="rpa-badge ${s[0]}">${s[1]}</span></td>
+                </tr>
+            `;
+        });
+
+        tbody.innerHTML = html;
+    };
+
+
+    // ============================================================
+    // 17. GỬI AI CHO TẤT CẢ VĂN BẢN ĐÃ CHỌN
+    // ============================================================
+    const runAIOnAll = async () => {
+        if (isProcessing) {
+            alert('Hệ thống đang xử lý, vui lòng đợi!');
+            return;
+        }
+
+        const checkboxes = document.querySelectorAll('.rpa-row-check:checked');
+        if (checkboxes.length === 0) {
+            alert('Hãy chọn ít nhất 1 văn bản!');
+            return;
+        }
+
+        const proceed = confirm(`🤖 Gửi ${checkboxes.length} văn bản đến AI backend?\n(Backend phải đang chạy tại ${CONFIG.BACKEND_URL})`);
+        if (!proceed) return;
+
+        isProcessing = true;
+        let success = 0, errors = 0;
+        const total = checkboxes.length;
+        updateProgress(0, total);
+
+        for (let i = 0; i < checkboxes.length; i++) {
+            const chk = checkboxes[i];
+            const id = chk.getAttribute('data-id');
+            const doc = docCache.get(id);
+            if (!doc) continue;
+
+            doc.status = 'pending';
+            updateDashboard();
+            updateProgress(i, total);
+
+            try {
+                // Đảm bảo có đủ thông tin (click + fetch)
+                const fullDoc = await ensureDocDetails(id);
+                if (fullDoc.attachments && fullDoc.attachments.length > 0) {
+                    const aiResult = await callAIBackend(fullDoc);
+                    doc.aiData = aiResult;
+                    doc.status = 'ai_done';
+                    success++;
+                } else {
+                    // Thử tải file từ DOM (view.cpx trả về đã có attachments)
+                    appendLog(`⚠️ VB ${doc.signNumber} không có file đính kèm - thử tải lại...`);
+                    // Retry view
+                    if (doc.creatorAcode) {
+                        const resp = await fetch(`/cumphumy/smartcloud/document/edocs/view.cpx?exeacode=${doc.creatorAcode}&id=${id}`);
+                        const data = await resp.json();
+                        handleViewResponse(data);
+                        const retryDoc = docCache.get(id);
+                        if (retryDoc && retryDoc.attachments && retryDoc.attachments.length > 0) {
+                            const aiResult = await callAIBackend(retryDoc);
+                            doc.aiData = aiResult;
+                            doc.status = 'ai_done';
+                            success++;
+                        } else {
+                            throw new Error('VB không có file PDF đính kèm sau khi retry');
+                        }
+                    } else {
+                        throw new Error('VB không có creatorAcode và không có file đính kèm');
+                    }
+                }
+            } catch (err) {
+                doc.status = 'ai_error';
+                doc.errorMsg = err.message;
+                errors++;
+                appendLog(`❌ ${doc.signNumber}: ${err.message}`);
+            }
+            updateDashboard();
+            updateProgress(i + 1, total);
+        }
+
+        isProcessing = false;
+        setStatus(`✅ Hoàn tất AI: ${success} thành công, ${errors} lỗi`);
+        updateProgress(total, total);
+    };
+
+    // ============================================================
+    // 18. TỰ ĐỘNG ĐIỀN CHO TẤT CẢ ĐÃ CHỌN
+    // ============================================================
+    const runFillOnAll = async () => {
+        if (isProcessing) {
+            alert('Hệ thống đang xử lý, vui lòng đợi!');
+            return;
+        }
+
+        const checkboxes = document.querySelectorAll('.rpa-row-check:checked');
+        if (checkboxes.length === 0) {
+            alert('Hãy chọn ít nhất 1 văn bản!');
+            return;
+        }
+
+        // Kiểm tra có doc nào chưa có aiData không
+        let missingAI = 0;
+        checkboxes.forEach(chk => {
+            const id = chk.getAttribute('data-id');
+            const doc = docCache.get(id);
+            if (!doc || !doc.aiData) missingAI++;
+        });
+
+        if (missingAI > 0) {
+            const proceed = confirm(`⚠️ ${missingAI}/${checkboxes.length} văn bản chưa được gửi AI (hoặc chưa có dữ liệu xử lý).\nBạn có muốn tiếp tục với dữ liệu hiện tại (có thể sửa tay trên bảng)?`);
+            if (!proceed) return;
+        }
+
+        const proceed = confirm(`🚀 Bắt đầu TỰ ĐỘNG ĐIỀN cho ${checkboxes.length} văn bản?\nQuá trình này sẽ thao tác trực tiếp trên giao diện iDesk.`);
+        if (!proceed) return;
+
+        isProcessing = true;
+        let success = 0, errors = 0;
+        const total = checkboxes.length;
+        updateProgress(0, total);
+
+        for (let i = 0; i < checkboxes.length; i++) {
+            const chk = checkboxes[i];
+            const id = chk.getAttribute('data-id');
+            const doc = docCache.get(id);
+            if (!doc || !doc.aiData) {
+                errors++;
+                appendLog(`⚠️ Bỏ qua VB ${id}: chưa có dữ liệu AI`);
+                updateProgress(i + 1, total);
+                continue;
+            }
+
+            setStatus(`⚡ Đang tự động điền: ${doc.signNumber || id} (${i + 1}/${total})`);
+            updateProgress(i, total);
+            chk.closest('tr').scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+            try {
+                await autoFillAndSubmit(id, doc.aiData);
+                doc.status = 'fill_done';
+                success++;
+                chk.checked = false;
+                appendLog(`✅ Hoàn tất: ${doc.signNumber}`);
+            } catch (err) {
+                doc.status = 'fill_error';
+                doc.errorMsg = err.message;
+                errors++;
+                appendLog(`❌ Lỗi ${doc.signNumber}: ${err.message}`);
+            }
+            updateDashboard();
+            updateProgress(i + 1, total);
+            await sleep(CONFIG.DELAY_MS.BETWEEN_DOCS);
+        }
+
+        isProcessing = false;
+        setStatus(`🏁 Kết thúc: ${success} thành công, ${errors} lỗi`);
+        updateProgress(total, total);
+        appendLog(`🏁 Kết thúc tự động điền: ${success}/${total} thành công`);
+    };
+
+    // ============================================================
+    // 19. PROGRESS BAR
+    // ============================================================
+    const updateProgress = (current, total) => {
+        const fill = document.getElementById('rpa-progress-fill');
+        const text = document.getElementById('rpa-progress-text');
+        if (fill && text) {
+            const pct = total > 0 ? Math.round((current / total) * 100) : 0;
+            fill.style.width = pct + '%';
+            text.textContent = `${current}/${total}`;
+        }
+    };
+
+    // ============================================================
+    // 20. INIT
+    // ============================================================
     const init = () => {
-        console.log("=== iDesk Auto-Fill Helper initialized ===");
-        // Enable XHR & Fetch intercepting
-        interceptAjax();
-        
-        // Wait for body to render then inject UI
-        setTimeout(() => {
-            createDashboardUI();
-            // Automatically scan list on initial load (có retry sẵn bên trong)
-            scanList();
-            // Từ giờ tự quét lại mỗi khi danh sách đổi, khỏi cần bấm tay
-            observeListChanges();
-        }, 1500);
+        console.log('=== iDesk RPA v2.0 starting ===');
+
+        // Intercept AJAX
+        interceptXHR();
+        interceptFetch();
+
+        // Đợi DOM sẵn sàng
+        const waitAndStart = () => {
+            if (!document.getElementById('received-document-widget')) {
+                setTimeout(waitAndStart, 500);
+                return;
+            }
+            createDashboard();
+            setTimeout(() => {
+                scanList(5);
+                observeListChanges();
+            }, 1000);
+        };
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', waitAndStart);
+        } else {
+            waitAndStart();
+        }
     };
 
-    // Run helper
     init();
 
 })();
