@@ -13,7 +13,7 @@
             <button id="ed-new-receiver-btn-save-create" type="button" class="btn btn-primary" title="Lưu và tạo mới" disabled="disabled" style="display: none !important;">
                 <i class="icon-plus-sign-alt"></i> Lưu và tạo mới
             </button>
-            <button id="ed-new-receiver-btn-save-transfer" type="button" class="btn btn-primary" title="Lưu và chuyển">
+            <button id="ed-new-receiver-btn-save-transfer" type="button" class="btn btn-primary hide" title="Lưu và chuyển" disabled="disabled" style="display: none !important;">
                 <i class="icon-external-link-sign"></i> Lưu và chuyển
             </button>
             <span id="ed-new-receiver-btn-workflow" class="hide"></span>
@@ -37,7 +37,7 @@
                     <li id="ed-new-receiver-btn-return"><a href="javascript:;"><i class="icon-reply"></i> Trả lại</a></li>
                     <li id="ed-new-receiver-btn-retrieve" disabled="disabled" style="display: none !important;"><a href="javascript:;"><i class="icon-rotate-left"></i> Thu hồi</a></li>
                     <!--<li id="ed-new-action-btn-commfeedback"><a href="javascript:;"><i class="icon-reply"></i> Phản hồi</a></li>-->
-                    <li id="ed-new-receiver-btn-delete" disabled="disabled" style="display: none !important;"><a href="javascript:;"><i class="icon-trash red"></i> Xóa</a></li>
+                    <li id="ed-new-receiver-btn-delete"><a href="javascript:;"><i class="icon-trash red"></i> Xóa</a></li>
                     <li id="ed-new-receiver-btn-mark-read" disabled="disabled" style="display: none !important;"><a href="javascript:;"><i class="icon-eye-open"></i> Đánh dấu là đã đọc</a></li>
                     <li id="ed-new-receiver-btn-mark-unread"><a href="javascript:;"><i class="icon-eye-close"></i> Đánh dấu là chưa đọc</a></li>
                     <li class="divider"></li>
@@ -50,7 +50,7 @@
 
         <div class="widget-toolbar" style="line-height: normal">
             <div class="btn-group">
-                <button id="ed-new-receiver-btn-previous" class="btn" disabled="">
+                <button id="ed-new-receiver-btn-previous" class="btn">
                     <i class="ace-icon icon-arrow-left"></i>
                 </button>
                 <button id="ed-new-receiver-btn-next" class="btn" disabled="">
@@ -81,18 +81,18 @@
                     <div class="row-fluid">
                         <div class="span2"><label class="ilabel control-label" for="edocs-txt-sign-number">Số/ký hiệu(<span class="required">):</span></label></div>
                         <div class="span4 input-icon input-icon-right" style="display: flex;">
-                            <input type="text" id="edocs-txt-sign-number" class="span12" maxlength="32" data-original-title="" title="">
-                            <i class="icon-search hide" id="ed-new-receiver-btn-check-sign-number" disabled="disabled" style="display: none !important;"></i>
+                            <input type="text" id="edocs-txt-sign-number" class="span12" maxlength="32" data-original-title="">
+                            <i class="icon-search" id="ed-new-receiver-btn-check-sign-number"></i>
                         </div>
                         <div class="span2"><label class="ilabel control-label" for="edocs-txt-doc-date-str">Ngày văn bản(<span class="required">):</span></label></div>
-                        <div class="span4 input-icon input-icon-right date"><input type="text" id="edocs-txt-doc-date-str" class="span12 date-picker" onclick="this.focus();this.select()" autocomplete="off" data-original-title="" title="">
+                        <div class="span4 input-icon input-icon-right date"><input type="text" id="edocs-txt-doc-date-str" class="span12 date-picker" onclick="this.focus();this.select()" autocomplete="off" data-original-title="">
                             <i class="icon-calendar"></i>
                         </div>
                     </div>
                     <div id="edocs-category-container" class="row-fluid">
                         <div class="span2"><label class="ilabel control-label" for="edocs-txt-category">Loại văn bản <span class="">(<span class="required"></span>)</span>:</label></div>
                         <div class="span4">
-                            <div class="select2-container select2-allowclear span12 marg-b-10-im" id="s2id_edocs\-txt\-category"><a href="javascript:void(0)" class="select2-choice" tabindex="-1">   <span class="select2-chosen" id="select2-chosen-1">Báo cáo</span><abbr class="select2-search-choice-close"></abbr>   <span class="select2-arrow" role="presentation"><b role="presentation"></b></span></a><label for="s2id_autogen1" class="select2-offscreen">Loại văn bản ():</label><input class="select2-focusser select2-offscreen" type="text" aria-haspopup="true" role="button" aria-labelledby="select2-chosen-1" id="s2id_autogen1"><div class="select2-drop select2-display-none select2-with-searchbox">   <div class="select2-search">       <label for="s2id_autogen1_search" class="select2-offscreen">Loại văn bản ():</label>       <input type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" class="select2-input" role="combobox" aria-expanded="true" aria-autocomplete="list" aria-owns="select2-results-1" id="s2id_autogen1_search" placeholder="">   </div>   <ul class="select2-results" role="listbox" id="select2-results-1">   </ul></div></div><input type="text" id="edocs-txt-category" class="span12 select2-offscreen" maxlength="32" tabindex="-1" data-original-title="" title="">
+                            <div class="select2-container select2-allowclear span12 marg-b-10-im" id="s2id_edocs\-txt\-category"><a href="javascript:void(0)" class="select2-choice" tabindex="-1">   <span class="select2-chosen" id="select2-chosen-1">Giấy mời</span><abbr class="select2-search-choice-close"></abbr>   <span class="select2-arrow" role="presentation"><b role="presentation"></b></span></a><label for="s2id_autogen1" class="select2-offscreen">Loại văn bản ():</label><input class="select2-focusser select2-offscreen" type="text" aria-haspopup="true" role="button" aria-labelledby="select2-chosen-1" id="s2id_autogen1"><div class="select2-drop select2-display-none select2-with-searchbox">   <div class="select2-search">       <label for="s2id_autogen1_search" class="select2-offscreen">Loại văn bản ():</label>       <input type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" class="select2-input" role="combobox" aria-expanded="true" aria-autocomplete="list" aria-owns="select2-results-1" id="s2id_autogen1_search" placeholder="">   </div>   <ul class="select2-results" role="listbox" id="select2-results-1">   </ul></div></div><input type="text" id="edocs-txt-category" class="span12 select2-offscreen" maxlength="32" tabindex="-1" data-original-title="Ô dữ liệu này không được để rỗng">
                         </div>
                         <div class="span2"><label class="ilabel control-label" for="edocs-txt-field" title="Lĩnh vực">Lĩnh vực <span class="hide">(<span class="required"></span>)</span>:</label></div>
                         <div class="span4 input-icon input-icon-right">
@@ -271,11 +271,11 @@
                     <div class="row-fluid">
                         <div class="span2"><label class="ilabel control-label" for="edocs-txt-book">Sổ văn bản đến :</label></div>
                         <div class="span4">
-                            <div class="select2-container span12 select2-allowclear" id="s2id_edocs\-txt\-book"><a href="javascript:void(0)" class="select2-choice" tabindex="-1">   <span class="select2-chosen" id="select2-chosen-2">Số văn bản đến UBND tỉnh</span><abbr class="select2-search-choice-close"></abbr>   <span class="select2-arrow" role="presentation"><b role="presentation"></b></span></a><label for="s2id_autogen2" class="select2-offscreen">Sổ văn bản đến :</label><input class="select2-focusser select2-offscreen" type="text" aria-haspopup="true" role="button" aria-labelledby="select2-chosen-2" id="s2id_autogen2"></div><input type="text" id="edocs-txt-book" class="span12 select2-offscreen" maxlength="64" tabindex="-1" title="Sổ văn bản đến :">
+                            <div class="select2-container span12" id="s2id_edocs\-txt\-book"><a href="javascript:void(0)" class="select2-choice select2-default" tabindex="-1">   <span class="select2-chosen" id="select2-chosen-2">Chọn sổ văn bản</span><abbr class="select2-search-choice-close"></abbr>   <span class="select2-arrow" role="presentation"><b role="presentation"></b></span></a><label for="s2id_autogen2" class="select2-offscreen">Sổ văn bản đến :</label><input class="select2-focusser select2-offscreen" type="text" aria-haspopup="true" role="button" aria-labelledby="select2-chosen-2" id="s2id_autogen2"><div class="select2-drop select2-display-none select2-with-searchbox">   <div class="select2-search">       <label for="s2id_autogen2_search" class="select2-offscreen">Sổ văn bản đến :</label>       <input type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" class="select2-input" role="combobox" aria-expanded="true" aria-autocomplete="list" aria-owns="select2-results-2" id="s2id_autogen2_search" placeholder="">   </div>   <ul class="select2-results" role="listbox" id="select2-results-2">   </ul></div></div><input type="text" id="edocs-txt-book" class="span12 select2-offscreen" maxlength="64" tabindex="-1" title="Sổ văn bản đến :">
                         </div>
                         <div class="span2"><label class="ilabel control-label" for="edocs-txt-serial-number">Số đến:</label></div>
                         <div class="span4 input-append">
-                            <input type="text" id="edocs-txt-serial-number" class="span10 mask-interger" maxlength="11" data-original-title="" title="">
+                            <input type="text" id="edocs-txt-serial-number" class="span10 mask-interger" maxlength="11" disabled="" data-original-title="">
                             <span class="add-on" id="edocs-btn-get-serial-number"><i class="icon-rotate-left" title="Lấy lại số đến" style="cursor: pointer;"></i></span>
                         </div>
                     </div>
@@ -287,11 +287,11 @@
                     <div class="row-fluid">
                         <div class="span2"><label class="ilabel control-label" for="edocs-txt-date">Ngày đến (<span class="required">):</span></label></div>
                         <div class="span4 input-icon input-icon-right date">
-                            <input type="text" id="edocs-txt-date" class="span12 date-picker" autocomplete="off" data-original-title="" title="">
+                            <input type="text" id="edocs-txt-date" class="span12 date-picker" autocomplete="off" disabled="" data-original-title="">
                             <i class="icon-calendar"></i>
                         </div>
                         <div class="span6">
-                            <label><input type="checkbox" id="edocs-txt-coincide"><span class="lbl"> Cho phép trùng số trong sổ văn bản</span></label>
+                            <label><input type="checkbox" id="edocs-txt-coincide" disabled=""><span class="lbl"> Cho phép trùng số trong sổ văn bản</span></label>
                         </div>
                     </div>
                     <div id="receive-published-page-container" class="row-fluid hide" style="display: none;">
@@ -301,7 +301,7 @@
                             </label>
                         </div>
                         <div class="span4">
-                            <input type="text" id="new-receive-txt-published-page" class="span12 mask-interger text-right" maxlength="5">
+                            <input type="text" id="new-receive-txt-published-page" class="span12 mask-interger text-right" maxlength="5" disabled="">
                         </div>
                         <div class="span2">
                             <label class="ilabel control-label" for="new-receive-txt-record-code">
@@ -309,14 +309,14 @@
                             </label>
                         </div>
                         <div class="span4">
-                            <input type="text" id="new-receive-txt-record-code" class="span12" maxlength="32">
+                            <input type="text" id="new-receive-txt-record-code" class="span12" maxlength="32" disabled="">
                         </div>
                     </div>
                     <div class="row-fluid">
                         <div class="span2"><label class="ilabel control-label" for="edocs-txt-receiver">Đơn vị nhận:</label></div>
                         <div class="span10">
                             <div class="input-icon input-icon-right">
-                                <textarea id="edocs-txt-receiver" maxlength="256" class="span12" style="padding-right: 5px;">                                </textarea>
+                                <textarea id="edocs-txt-receiver" maxlength="256" class="span12" style="padding-right: 5px;" disabled="">                                </textarea>
                                 <i class="icon-magic" data-trigger="lookup" title="Gợi ý"></i>
                             </div>
                         </div>
@@ -337,7 +337,7 @@
                                 <div class="upload-container">
                                     <div id="ed-attach-zone" class="controls compose-controls qq-upload-list"></div>
                                 </div>
-                            <button data-action="downloadAll" class="btn btn-sm" style="float: right"><i class="icon-download-alt"></i> Tải về tất cả tài liệu <span class="number">(4)</span></button></div>
+                            <button data-action="downloadAll" class="btn btn-sm" style="float: right"><i class="icon-download-alt"></i> Tải về tất cả tài liệu <span class="number">(3)</span></button></div>
                         </div>
                     </div>
                     <div class="row-fluid hide" data-file-display="file-origin" style="display: block;">
@@ -355,7 +355,7 @@
                                             <th style="width:19px;padding:8px;">Xóa</th>
                                         </tr>
                                         </thead>
-                                        <tbody><tr id="6a5ad57a23d6d366ad225d7a" data-att-id="5007904"><td><i class="file-icon xicon-docx"></i></td><td><a data-file-action="view" data-contentuuid="6a5ad57a23d6d366ad225d7a" href="javascript:;">BC_UBND_VHXH_Về việc trien khai ke hoach 246-KH-UBND ngày 02-07-2026.docx</a></td><td></td><td></td><td><a href="javascript:;" class="link-file" data-file-action="download" data-contentuuid="6a5ad57a23d6d366ad225d7a"><span class="label label-info"><i class="icon-download-alt"></i></span></a></td><td><a href="javascript:;" class="link-file" data-file-action="delete" data-id="5007904"><span class="label label-important"><i class="icon-trash"></i></span></a></td></tr><tr id="6a5ad57a23d6d366ad225d7b" data-att-id="5007905"><td><i class="file-icon xicon-pdf"></i></td><td><a data-file-action="view" data-contentuuid="6a5ad57a23d6d366ad225d7b" href="javascript:;">BANG TONG HOP.pdf</a></td><td class="text-center"></td><td class="text-center"><a href="javascript:;" class="link-file" data-file-action="verify" data-contentuuid="6a5ad57a23d6d366ad225d7b"><span class="label label-info"><i class="icon-ok-sign"></i></span></a></td><td><a href="javascript:;" class="link-file" data-file-action="download" data-contentuuid="6a5ad57a23d6d366ad225d7b"><span class="label label-info"><i class="icon-download-alt"></i></span></a></td><td><a href="javascript:;" class="link-file" data-file-action="delete" data-id="5007905"><span class="label label-important"><i class="icon-trash"></i></span></a></td></tr><tr id="6a5ad57a23d6d366ad225d7c" data-att-id="5007906"><td><i class="file-icon xicon-xls"></i></td><td><a data-file-action="view" data-contentuuid="6a5ad57a23d6d366ad225d7c" href="javascript:;">BANG TONG HOP.xls</a></td><td></td><td></td><td><a href="javascript:;" class="link-file" data-file-action="download" data-contentuuid="6a5ad57a23d6d366ad225d7c"><span class="label label-info"><i class="icon-download-alt"></i></span></a></td><td><a href="javascript:;" class="link-file" data-file-action="delete" data-id="5007906"><span class="label label-important"><i class="icon-trash"></i></span></a></td></tr><tr id="6a5ad57a23d6d366ad225d7d" data-att-id="5007907"><td><i class="file-icon xicon-pdf"></i></td><td><a data-file-action="view" data-contentuuid="6a5ad57a23d6d366ad225d7d" href="javascript:;">BC_UBND_VHXH_Ve viec trien khai ke hoach 246-KH-UBND ngay 02-07-2026.pdf</a></td><td class="text-center"></td><td class="text-center"><a href="javascript:;" class="link-file" data-file-action="verify" data-contentuuid="6a5ad57a23d6d366ad225d7d"><span class="label label-info"><i class="icon-ok-sign"></i></span></a></td><td><a href="javascript:;" class="link-file" data-file-action="download" data-contentuuid="6a5ad57a23d6d366ad225d7d"><span class="label label-info"><i class="icon-download-alt"></i></span></a></td><td><a href="javascript:;" class="link-file" data-file-action="delete" data-id="5007907"><span class="label label-important"><i class="icon-trash"></i></span></a></td></tr></tbody>
+                                        <tbody><tr id="6a5af61723d6d366ad22781f" data-att-id="5009349"><td><i class="file-icon xicon-pdf"></i></td><td><a data-file-action="view" data-contentuuid="6a5af61723d6d366ad22781f" href="javascript:;">4866_GM-BQLDA_18072026-signed_02.pdf</a></td><td class="text-center"></td><td class="text-center"><a href="javascript:;" class="link-file" data-file-action="verify" data-contentuuid="6a5af61723d6d366ad22781f"><span class="label label-info"><i class="icon-ok-sign"></i></span></a></td><td><a href="javascript:;" class="link-file" data-file-action="download" data-contentuuid="6a5af61723d6d366ad22781f"><span class="label label-info"><i class="icon-download-alt"></i></span></a></td><td><a href="javascript:;" class="link-file" data-file-action="delete" data-id="5009349"><span class="label label-important"><i class="icon-trash"></i></span></a></td></tr><tr id="6a5af61923d6d366ad227824" data-att-id="5009350"><td><i class="file-icon xicon-jpg"></i></td><td><a data-file-action="view" data-contentuuid="6a5af61923d6d366ad227824" href="javascript:;">1784338547973_7237736926013138922_g7398578459597404470_17dd3cee628da71b02c12dd545e9bd7c.jpg</a></td><td></td><td></td><td><a href="javascript:;" class="link-file" data-file-action="download" data-contentuuid="6a5af61923d6d366ad227824"><span class="label label-info"><i class="icon-download-alt"></i></span></a></td><td><a href="javascript:;" class="link-file" data-file-action="delete" data-id="5009350"><span class="label label-important"><i class="icon-trash"></i></span></a></td></tr><tr id="6a5af61923d6d366ad227826" data-att-id="5009351"><td><i class="file-icon xicon-doc"></i></td><td><a data-file-action="view" data-contentuuid="6a5af61923d6d366ad227826" href="javascript:;">2026.7.18. GM HOP CAC DU AN TRONG DIEM TAI UBND TINH_BAN GT&amp;DD.doc</a></td><td></td><td></td><td><a href="javascript:;" class="link-file" data-file-action="download" data-contentuuid="6a5af61923d6d366ad227826"><span class="label label-info"><i class="icon-download-alt"></i></span></a></td><td><a href="javascript:;" class="link-file" data-file-action="delete" data-id="5009351"><span class="label label-important"><i class="icon-trash"></i></span></a></td></tr></tbody>
                                     </table>
                                 </div>
                             </div>
