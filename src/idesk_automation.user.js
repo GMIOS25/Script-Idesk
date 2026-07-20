@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         iDesk RPA Auto-Fill v2.0
+// @name         iDesk RPA Auto-Fill v2.1
 // @namespace    http://inet.vn/
-// @version      2.0
-// @description  iDesk Automation: Quét danh sách VB đến → Gửi AI → Tự động điền "Xử lý chính", "Phối hợp xử lý", "Hạn xử lý" → Đồng ý
+// @version      2.1
+// @description  iDesk Automation: Bấm "Quét & Gửi AI" để quét danh sách VB đến và tự động gửi AI ngay → Tự động điền "Xử lý chính", "Phối hợp xử lý", "Hạn xử lý" → Đồng ý
 // @author       Senior Developer
 // @match        https://vpdt.gialai.gov.vn/cumphumy/smartcloud/idesk6/page/paperwork/index.cpx*
 // @match        https://vpdt.gialai.gov.vn/cumphumy/smartcloud/idesk6/page/paperwork/*
@@ -16,6 +16,14 @@
 // @updateURL    https://raw.githubusercontent.com/GMIOS25/Script-Idesk/main/idesk_automation.user.js
 // ==/UserScript==
 
+// CHANGELOG v2.1
+// - CHANGE: Bỏ cơ chế tự động quét (MutationObserver quan sát danh sách + auto
+//   scan lúc init). Giờ script CHỈ quét khi người dùng bấm nút "Quét & Gửi AI".
+// - CHANGE: Gộp 2 bước "Quét" và "Gửi AI tất cả" thành 1 hành động duy nhất
+//   (scanAndSendAll). Bỏ nút "Gửi AI tất cả" và hàm runAIOnAll. Sau khi quét,
+//   mọi văn bản đang ở trạng thái "idle" (chưa từng gửi AI) sẽ được tự động
+//   gửi ngay, không cần chọn checkbox hay bấm thêm nút nào.
+//
 // CHANGELOG v2.0
 // - FIX CRITICAL: Typo "qrreceiving" → "qsreceiving" (AJAX interceptor không hoạt động)
 // - FIX: Bổ sung Fetch API interceptor (iDesk dùng fetch cho 1 số API)
@@ -25,7 +33,6 @@
 // - FIX: autoFillAndSubmit - chờ các transition DOM kỹ hơn, dùng MutationObserver khi cần
 // - NEW: Floating progress bar + log console panel
 // - NEW: Config persistence dùng GM_setValue/GM_getValue
-// - NEW: Scan tự động sau khi chuyển tab hoặc thay đổi filter
 // - NEW: Bỏ qua "Số đến" - chỉ fill "Sổ văn bản đến" rồi Lưu và chuyển
 // - NEW: Xử lý lỗi chi tiết hơn, retry khi timeout
 
@@ -102,7 +109,6 @@
     // ============================================================
     const docCache = new Map(); // Map<id, DocObject>
     let isProcessing = false;
-    let scanObserver = null;
     let logPanel = null;
 
     // ============================================================
@@ -767,31 +773,6 @@
     };
 
     // ============================================================
-    // 13. AUTO-OBSERVE LIST CHANGES
-    // ============================================================
-    const observeListChanges = () => {
-        let debounceTimer = null;
-        const handler = () => {
-            clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(() => {
-                if (!isProcessing) scanList(1);
-            }, 800);
-        };
-
-        if (scanObserver) scanObserver.disconnect();
-        scanObserver = new MutationObserver(handler);
-
-        // Observe left panel + body
-        const listContainer = document.querySelector('#listview-list-content');
-        if (listContainer) {
-            scanObserver.observe(listContainer, { childList: true, subtree: true });
-        }
-        scanObserver.observe(document.body, { childList: true, subtree: true });
-
-        appendLog('👀 Đã bật tự động quét khi danh sách thay đổi');
-    };
-
-    // ============================================================
     // 14. UI DASHBOARD
     // ============================================================
     const createDashboard = () => {
@@ -1164,8 +1145,7 @@
             </div>
             <div class="rpa-body">
                 <div class="rpa-toolbar">
-                    <button class="rpa-btn rpa-btn-primary" id="rpa-btn-scan">🔄 Quét</button>
-                    <button class="rpa-btn rpa-btn-success" id="rpa-btn-ai-all">🤖 Gửi AI tất cả</button>
+                    <button class="rpa-btn rpa-btn-primary" id="rpa-btn-scan">🔄 Quét &amp; Gửi AI</button>
                     <button class="rpa-btn rpa-btn-purple" id="rpa-btn-fill-all">⚡ Tự động điền</button>
                     <button class="rpa-btn rpa-btn-sm rpa-btn-outline" id="rpa-btn-select-all">☑ Chọn/Bỏ</button>
                     <div style="flex:1"></div>
@@ -1186,7 +1166,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <tr><td colspan="8" style="text-align:center;color:#64748b;padding:30px;">⟳ Nhấn "Quét" để tải danh sách văn bản...</td></tr>
+                            <tr><td colspan="8" style="text-align:center;color:#64748b;padding:30px;">⟳ Nhấn "Quét & Gửi AI" để bắt đầu...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -1196,7 +1176,7 @@
                 </div>
             </div>
             <div class="rpa-footer">
-                <span class="rpa-status-text" id="rpa-footer-status">Sẵn sàng. Nhấn Quét để bắt đầu.</span>
+                <span class="rpa-status-text" id="rpa-footer-status">Sẵn sàng. Nhấn "Quét & Gửi AI" để bắt đầu.</span>
                 <div class="rpa-progress-wrap">
                     <span class="rpa-progress-text" id="rpa-progress-text">0/0</span>
                     <div class="rpa-progress-bar"><div class="rpa-progress-fill" id="rpa-progress-fill"></div></div>
@@ -1217,8 +1197,7 @@
         document.getElementById('rpa-btn-toggle-log').addEventListener('click', () => {
             logPanel.classList.toggle('open');
         });
-        document.getElementById('rpa-btn-scan').addEventListener('click', () => scanList(5));
-        document.getElementById('rpa-btn-ai-all').addEventListener('click', runAIOnAll);
+        document.getElementById('rpa-btn-scan').addEventListener('click', scanAndSendAll);
         document.getElementById('rpa-btn-fill-all').addEventListener('click', runFillOnAll);
         document.getElementById('rpa-check-all').addEventListener('change', (e) => {
             document.querySelectorAll('.rpa-row-check').forEach(cb => cb.checked = e.target.checked);
@@ -1285,7 +1264,7 @@
         if (countEl) countEl.textContent = docCache.size.toString();
 
         if (docCache.size === 0) {
-            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:#64748b;padding:30px;">⟳ Nhấn "Quét" để tải danh sách văn bản...</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:#64748b;padding:30px;">⟳ Nhấn "Quét & Gửi AI" để bắt đầu...</td></tr>`;
             return;
         }
 
@@ -1331,31 +1310,42 @@
 
 
     // ============================================================
-    // 17. GỬI AI CHO TẤT CẢ VĂN BẢN ĐÃ CHỌN
+    // 17. QUÉT DANH SÁCH + TỰ ĐỘNG GỬI AI CHO TẤT CẢ VĂN BẢN CHƯA GỬI
     // ============================================================
-    const runAIOnAll = async () => {
+    // Gộp 2 bước cũ (Quét -> bấm "Gửi AI tất cả") thành 1 hành động duy nhất:
+    // người dùng chỉ cần bấm "Quét & Gửi AI" 1 lần, script tự quét toàn bộ
+    // danh sách đang hiển thị rồi tự động gửi hết các văn bản chưa gửi (status
+    // 'idle') sang AI backend, không cần chọn checkbox hay bấm thêm nút nào.
+    const scanAndSendAll = async () => {
         if (isProcessing) {
             alert('Hệ thống đang xử lý, vui lòng đợi!');
             return;
         }
 
-        const checkboxes = document.querySelectorAll('.rpa-row-check:checked');
-        if (checkboxes.length === 0) {
-            alert('Hãy chọn ít nhất 1 văn bản!');
+        // Bước 1: quét danh sách hiện có trên DOM (chỉ chạy khi người dùng chủ động bấm)
+        const found = await scanList(5);
+        if (!found) return;
+
+        // Bước 2: lấy toàn bộ văn bản đang ở trạng thái "idle" (chưa từng gửi AI)
+        // Văn bản đã 'ai_done'/'fill_done' từ lần quét trước sẽ không bị gửi lại.
+        const pendingIds = [];
+        docCache.forEach((doc, id) => {
+            if (doc.status === 'idle') pendingIds.push(id);
+        });
+
+        if (pendingIds.length === 0) {
+            setStatus(`📋 Đã quét ${docCache.size} văn bản, không có văn bản mới cần gửi AI.`);
             return;
         }
 
-        const proceed = confirm(`🤖 Gửi ${checkboxes.length} văn bản đến AI backend?\n(Backend phải đang chạy tại ${CONFIG.BACKEND_URL})`);
-        if (!proceed) return;
-
         isProcessing = true;
         let success = 0, errors = 0;
-        const total = checkboxes.length;
+        const total = pendingIds.length;
         updateProgress(0, total);
+        setStatus(`📤 Tự động gửi ${total} văn bản đến AI backend...`);
 
-        for (let i = 0; i < checkboxes.length; i++) {
-            const chk = checkboxes[i];
-            const id = chk.getAttribute('data-id');
+        for (let i = 0; i < pendingIds.length; i++) {
+            const id = pendingIds[i];
             const doc = docCache.get(id);
             if (!doc) continue;
 
@@ -1511,10 +1501,7 @@
                 return;
             }
             createDashboard();
-            setTimeout(() => {
-                scanList(5);
-                observeListChanges();
-            }, 1000);
+            appendLog('ℹ️ Chưa quét tự động. Bấm "Quét & Gửi AI" khi bạn muốn bắt đầu.');
         };
 
         if (document.readyState === 'loading') {
