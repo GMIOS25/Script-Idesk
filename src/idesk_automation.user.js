@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         iDesk RPA Auto-Fill v2.1
 // @namespace    http://inet.vn/
-// @version      2.1
+// @version      2.1.1
 // @description  iDesk Automation: Bấm "Quét & Gửi AI" để quét danh sách VB đến và tự động gửi AI ngay → Tự động điền "Xử lý chính", "Phối hợp xử lý", "Hạn xử lý" → Đồng ý
 // @author       Senior Developer
 // @match        https://vpdt.gialai.gov.vn/cumphumy/smartcloud/idesk6/page/paperwork/index.cpx*
@@ -12,8 +12,8 @@
 // @grant        GM_addStyle
 // @grant        unsafeWindow
 // @run-at       document-end
-// @downloadURL  https://raw.githubusercontent.com/GMIOS25/Script-Idesk/main/idesk_automation.user.js
-// @updateURL    https://raw.githubusercontent.com/GMIOS25/Script-Idesk/main/idesk_automation.user.js
+// @downloadURL  https://raw.githubusercontent.com/GMIOS25/Script-Idesk/main/src/idesk_automation.user.js
+// @updateURL    https://raw.githubusercontent.com/GMIOS25/Script-Idesk/main/src/idesk_automation.user.js
 // ==/UserScript==
 
 // CHANGELOG v2.1
