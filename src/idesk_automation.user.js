@@ -801,8 +801,12 @@
                 overflow: hidden !important;
                 font-size: 13px !important;
                 line-height: 1.4 !important;
-                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), height 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-radius 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
                 user-select: none !important;
+            }
+            #idesk-rpa-hub.rpa-dragging {
+                transition: none !important;
+                will-change: top, left !important;
             }
             #idesk-rpa-hub * {
                 box-sizing: border-box !important;
@@ -1217,6 +1221,7 @@
     const makeDraggable = (elmnt) => {
         const header = elmnt.querySelector('.rpa-header');
         let startX, startY, startTop, startLeft, dragging = false;
+        let animationFrameId = null;
 
         header.addEventListener('pointerdown', (e) => {
             if (e.button !== 0 || e.target.closest('button')) return;
@@ -1230,6 +1235,7 @@
             elmnt.style.left = startLeft + 'px';
             elmnt.style.bottom = 'auto';
             elmnt.style.right = 'auto';
+            elmnt.classList.add('rpa-dragging');
             header.setPointerCapture(e.pointerId);
             header.style.cursor = 'grabbing';
             e.preventDefault();
@@ -1239,13 +1245,27 @@
             if (!dragging) return;
             const dx = e.clientX - startX;
             const dy = e.clientY - startY;
-            elmnt.style.left = Math.min(Math.max(startLeft + dx, -elmnt.offsetWidth + 80), window.innerWidth - 60) + 'px';
-            elmnt.style.top = Math.min(Math.max(startTop + dy, 0), window.innerHeight - 50) + 'px';
+
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+            }
+
+            animationFrameId = requestAnimationFrame(() => {
+                const newLeft = Math.min(Math.max(startLeft + dx, -elmnt.offsetWidth + 80), window.innerWidth - 60);
+                const newTop = Math.min(Math.max(startTop + dy, 0), window.innerHeight - 50);
+                elmnt.style.left = newLeft + 'px';
+                elmnt.style.top = newTop + 'px';
+            });
         });
 
         const stop = (e) => {
             if (!dragging) return;
             dragging = false;
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
+            elmnt.classList.remove('rpa-dragging');
             header.style.cursor = 'grab';
             try { header.releasePointerCapture(e.pointerId); } catch (err) {}
         };
