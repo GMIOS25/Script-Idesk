@@ -785,7 +785,7 @@
                 position: fixed !important;
                 bottom: 20px !important;
                 right: 20px !important;
-                width: 820px !important;
+                width: 1600px !important;
                 height: 520px !important;
                 background: rgba(15, 23, 42, 0.92) !important;
                 backdrop-filter: blur(20px) !important;
@@ -812,7 +812,7 @@
                 box-sizing: border-box !important;
             }
             #idesk-rpa-hub.minimized {
-                width: 320px !important;
+                width: 380px !important;
                 height: 44px !important;
                 border-radius: 22px !important;
                 cursor: pointer !important;
@@ -967,7 +967,7 @@
             }
             
             .rpa-doc-cell {
-                max-width: 120px !important;
+                max-width: 260px !important;
                 overflow: hidden !important;
                 text-overflow: ellipsis !important;
                 white-space: nowrap !important;
@@ -998,7 +998,7 @@
             .rpa-badge-sent { background: rgba(99,102,241,0.15) !important; color: #818cf8 !important; }
             
             .rpa-subject-preview {
-                max-width: 200px !important;
+                max-width: 700px !important;
                 overflow: hidden !important;
                 text-overflow: ellipsis !important;
                 white-space: nowrap !important;
@@ -1161,16 +1161,22 @@
                             <tr>
                                 <th style="width:24px;"><input type="checkbox" id="rpa-check-all" checked></th>
                                 <th style="width:70px;">Số hiệu</th>
-                                <th style="width:60px;">Loại VB</th>
-                                <th style="width:80px;">CQ Ban hành</th>
+                                <th style="width:50px;">Loại VB</th>
+                                <th style="width:85px;">CQ Ban hành</th>
                                 <th style="width:65px;">Ngày VB</th>
-                                <th style="width:65px;">Người ký</th>
+                                <th style="width:60px;">Người ký</th>
                                 <th>Trích yếu</th>
-                                <th style="width:70px;">Trạng thái</th>
+                                <th style="width:120px;">Tóm tắt</th>
+                                <th style="width:90px;">ĐV xử lý</th>
+                                <th style="width:90px;">LĐ theo dõi</th>
+                                <th style="width:75px;">Hạn TH</th>
+                                <th style="width:90px;">ĐV phối hợp</th>
+                                <th style="width:80px;">Ghi chú</th>
+                                <th style="width:75px;">Trạng thái</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr><td colspan="8" style="text-align:center;color:#64748b;padding:30px;">⟳ Nhấn "Quét & Gửi AI" để bắt đầu...</td></tr>
+                            <tr><td colspan="14" style="text-align:center;color:#64748b;padding:30px;">⟳ Nhấn "Quét & Gửi AI" để bắt đầu...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -1284,7 +1290,7 @@
         if (countEl) countEl.textContent = docCache.size.toString();
 
         if (docCache.size === 0) {
-            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:#64748b;padding:30px;">⟳ Nhấn "Quét & Gửi AI" để bắt đầu...</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="14" style="text-align:center;color:#64748b;padding:30px;">⟳ Nhấn "Quét & Gửi AI" để bắt đầu...</td></tr>`;
             return;
         }
 
@@ -1303,13 +1309,24 @@
                              doc.status === 'ai_done' || doc.status === 'fill_done' ? 'rpa-row-done' :
                              doc.status === 'ai_error' || doc.status === 'fill_error' ? 'rpa-row-error' : '';
 
-            // Format các trường, fallback cho giá trị trống
+            // Format các trường FE, fallback cho giá trị trống
             const signNumber = doc.signNumber || '---';
             const category = doc.category || '---';
             const author = doc.author || '---';
             const docDate = doc.docDateStr || '---';
             const signer = doc.signer || '---';
             const subject = doc.subject || '';
+
+            // Trích xuất AI fields từ doc.aiData theo schema METADATA_SCHEMA.md
+            const ai = doc.aiData || {};
+            const summary = ai.summary || '---';
+            const processingUnit = ai.processing_unit || '---';
+            const monitoringLeader = ai.monitoring_leader || '---';
+            const implementationDeadline = ai.implementation_deadline || '---';
+            const coordinatingUnits = (ai.coordinating_units && Array.isArray(ai.coordinating_units) && ai.coordinating_units.length > 0)
+                ? ai.coordinating_units.join(', ')
+                : '---';
+            const notes = ai.notes || '---';
 
             html += `
                 <tr data-id="${id}" class="${rowClass}">
@@ -1320,6 +1337,12 @@
                     <td><div class="rpa-doc-cell" title="${docDate}">${docDate}</div></td>
                     <td><div class="rpa-doc-cell" title="${signer}">${signer}</div></td>
                     <td><div class="rpa-subject-preview" title="${subject}">${subject.substring(0, 80)}${subject.length > 80 ? '...' : ''}</div></td>
+                    <td><div class="rpa-doc-cell-sub" title="${summary}">${summary}</div></td>
+                    <td><div class="rpa-doc-cell" title="${processingUnit}">${processingUnit}</div></td>
+                    <td><div class="rpa-doc-cell" title="${monitoringLeader}">${monitoringLeader}</div></td>
+                    <td><div class="rpa-doc-cell rpa-doc-cell-title" title="${implementationDeadline}">${implementationDeadline}</div></td>
+                    <td><div class="rpa-doc-cell" title="${coordinatingUnits}">${coordinatingUnits}</div></td>
+                    <td><div class="rpa-doc-cell-sub" title="${notes}">${notes}</div></td>
                     <td><span class="rpa-badge ${s[0]}">${s[1]}</span></td>
                 </tr>
             `;
