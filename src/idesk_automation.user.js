@@ -930,7 +930,7 @@
             .rpa-table {
                 width: 100% !important;
                 border-collapse: collapse !important;
-                font-size: 12px !important;
+                font-size: 13px !important;
                 text-align: left !important;
             }
             .rpa-table th {
@@ -942,16 +942,16 @@
                 top: 0 !important;
                 z-index: 1 !important;
                 border-bottom: 1px solid rgba(255,255,255,0.06) !important;
-                font-size: 10px !important;
+                font-size: 11px !important;
                 text-transform: uppercase !important;
                 letter-spacing: 0.3px !important;
                 white-space: nowrap !important;
             }
             .rpa-table td {
-                padding: 5px 6px !important;
+                padding: 6px 6px !important;
                 border-bottom: 1px solid rgba(255,255,255,0.03) !important;
                 vertical-align: middle !important;
-                font-size: 11px !important;
+                font-size: 13px !important;
             }
             .rpa-table tr:hover td {
                 background: rgba(255,255,255,0.02) !important;
@@ -971,16 +971,16 @@
                 overflow: hidden !important;
                 text-overflow: ellipsis !important;
                 white-space: nowrap !important;
-                line-height: 1.3 !important;
+                line-height: 1.4 !important;
             }
             .rpa-doc-cell-title {
                 font-weight: 600 !important;
                 color: #f1f5f9 !important;
-                font-size: 11px !important;
+                font-size: 13px !important;
             }
             .rpa-doc-cell-sub {
                 color: #94a3b8 !important;
-                font-size: 10px !important;
+                font-size: 12px !important;
             }
             
             .rpa-badge {
@@ -988,7 +988,7 @@
                 padding: 2px 6px !important;
                 border-radius: 12px !important;
                 font-weight: 600 !important;
-                font-size: 9px !important;
+                font-size: 11px !important;
                 letter-spacing: 0.3px !important;
             }
             .rpa-badge-idle { background: rgba(148,163,184,0.12) !important; color: #94a3b8 !important; }
@@ -1003,14 +1003,8 @@
                 text-overflow: ellipsis !important;
                 white-space: nowrap !important;
                 color: #cbd5e1 !important;
-                font-size: 10px !important;
+                font-size: 12px !important;
             }
-
-            .rpa-badge-idle { background: rgba(148,163,184,0.12) !important; color: #94a3b8 !important; }
-            .rpa-badge-pending { background: rgba(245,158,11,0.15) !important; color: #fbbf24 !important; }
-            .rpa-badge-success { background: rgba(16,185,129,0.15) !important; color: #34d399 !important; }
-            .rpa-badge-error { background: rgba(239,68,68,0.15) !important; color: #f87171 !important; }
-            .rpa-badge-sent { background: rgba(99,102,241,0.15) !important; color: #818cf8 !important; }
             
             .rpa-ai-fields {
                 display: flex !important;
