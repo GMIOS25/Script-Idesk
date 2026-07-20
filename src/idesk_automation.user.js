@@ -612,7 +612,7 @@
             }
             #idesk-rpa-hub.rpa-dragging { transition: none !important; }
             #idesk-rpa-hub * { box-sizing: border-box !important; }
-            
+
             #idesk-rpa-hub.minimized {
                 width: 380px !important;
                 height: 46px !important;
@@ -620,7 +620,7 @@
             }
             #idesk-rpa-hub.minimized .rpa-body,
             #idesk-rpa-hub.minimized .rpa-footer { display: none !important; }
-            
+
             .rpa-header {
                 display: flex !important;
                 justify-content: space-between !important;
@@ -632,7 +632,7 @@
                 min-height: 46px !important;
             }
             .rpa-header:active { cursor: grabbing !important; }
-            
+
             .rpa-title {
                 font-weight: 600 !important;
                 font-size: 15px !important;
@@ -650,7 +650,7 @@
                 border-radius: 9999px !important;
                 font-family: 'Geist Mono', 'SF Mono', monospace !important;
             }
-            
+
             .rpa-header-actions { display: flex !important; gap: 6px !important; }
             .rpa-header-actions button {
                 background: transparent !important;
@@ -666,7 +666,7 @@
                 background: #262626 !important;
                 color: #FFFFFF !important;
             }
-            
+
             .rpa-body {
                 flex: 1 !important;
                 padding: 14px !important;
@@ -675,13 +675,13 @@
                 gap: 12px !important;
                 overflow: hidden !important;
             }
-            
+
             .rpa-toolbar {
                 display: flex !important;
                 gap: 10px !important;
                 align-items: center !important;
             }
-            
+
             /* Minimalist Large Buttons */
             .rpa-btn {
                 background: #1A1A1A !important;
@@ -699,7 +699,7 @@
             }
             .rpa-btn:hover { background: #262626 !important; color: #FFFFFF !important; }
             .rpa-btn:active { transform: scale(0.98) !important; }
-            
+
             .rpa-btn-primary {
                 background: #FFFFFF !important;
                 color: #111111 !important;
@@ -707,7 +707,7 @@
                 font-weight: 600 !important;
             }
             .rpa-btn-primary:hover { background: #E5E5E5 !important; }
-            
+
             .rpa-btn-purple {
                 background: #EAEAEA !important;
                 color: #111111 !important;
@@ -715,14 +715,14 @@
                 font-weight: 600 !important;
             }
             .rpa-btn-purple:hover { background: #D4D4D4 !important; }
-            
+
             .rpa-btn-outline {
                 background: transparent !important;
                 border: 1px solid #2E2E2E !important;
                 color: #A1A1AA !important;
             }
             .rpa-btn-outline:hover { border-color: #444444 !important; color: #FFFFFF !important; }
-            
+
             /* Minimalist Table & Expandable Accordion Rows */
             .rpa-table-wrap {
                 flex: 1 !important;
@@ -733,7 +733,7 @@
             }
             .rpa-table-wrap::-webkit-scrollbar { width: 6px !important; }
             .rpa-table-wrap::-webkit-scrollbar-thumb { background: #262626 !important; border-radius: 3px !important; }
-            
+
             .rpa-table {
                 width: 100% !important;
                 border-collapse: collapse !important;
@@ -753,21 +753,21 @@
                 letter-spacing: 0.05em !important;
                 text-align: left !important;
             }
-            
+
             .rpa-row-main {
                 cursor: pointer !important;
                 transition: background 0.15s !important;
             }
             .rpa-row-main:hover { background: #18181B !important; }
             .rpa-row-main.expanded { background: #1C1C1F !important; }
-            
+
             .rpa-row-main td {
                 padding: 12px 12px !important;
                 border-bottom: 1px solid #222225 !important;
                 vertical-align: middle !important;
                 color: #E4E4E7 !important;
             }
-            
+
             .rpa-doc-code {
                 font-family: 'Geist Mono', 'SF Mono', monospace !important;
                 font-weight: 600 !important;
@@ -779,7 +779,7 @@
                 color: #D4D4D8 !important;
                 line-height: 1.5 !important;
             }
-            
+
             /* Expand/Collapse Chevron Indicator */
             .rpa-toggle-icon {
                 display: inline-flex !important;
@@ -796,7 +796,7 @@
                 transform: rotate(180deg) !important;
                 color: #FFFFFF !important;
             }
-            
+
             /* Detail Drawer Dropdown Panel */
             .rpa-row-detail {
                 background: #161618 !important;
@@ -820,7 +820,7 @@
             }
             .rpa-detail-field.span-2 { grid-column: span 2 !important; }
             .rpa-detail-field.span-full { grid-column: span 3 !important; }
-            
+
             .rpa-detail-label {
                 font-size: 11px !important;
                 text-transform: uppercase !important;
@@ -842,7 +842,7 @@
                 color: #FFFFFF !important;
                 font-weight: 500 !important;
             }
-            
+
             /* Status Badges */
             .rpa-badge {
                 display: inline-flex !important;
@@ -859,7 +859,7 @@
             .rpa-badge-success { background: #14291B !important; color: #4ADE80 !important; }
             .rpa-badge-error { background: #2D1517 !important; color: #F87171 !important; }
             .rpa-badge-sent { background: #102030 !important; color: #60A5FA !important; }
-            
+
             /* Footer & Log Panel */
             .rpa-footer {
                 display: flex !important;
@@ -897,7 +897,7 @@
                 color: #888888 !important;
                 font-family: 'Geist Mono', 'SF Mono', monospace !important;
             }
-            
+
             .rpa-log-panel {
                 max-height: 0 !important;
                 overflow-y: auto !important;
