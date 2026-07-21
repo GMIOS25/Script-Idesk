@@ -135,7 +135,7 @@
                 return attDigitsMatch && attDigitsMatch[1] === signDigits;
             });
             if (matchedByNum) {
-                appendLog(`Match file din kem theo so dau "${signDigits}": ${matchedByNum.name}`);
+                appendLog(`Match file dinh kem theo so dau "${signDigits}": ${matchedByNum.name}`);
                 return matchedByNum;
             }
         }
@@ -311,7 +311,7 @@
     const callAIBackend = async (doc) => {
         const targetAttach = selectAttachment(doc);
         if (!targetAttach) {
-            throw new Error(`Khong tim thay file din kem phu hop cho VB "${doc.signNumber}"`);
+            throw new Error(`Khong tim thay file dinh kem phu hop cho VB "${doc.signNumber}"`);
         }
 
         const pdfFile = await downloadPDF(targetAttach.contentUid, targetAttach.name);
@@ -918,7 +918,7 @@
                 </div>
                 <div class="rpa-header-actions">
                     <button id="rpa-btn-toggle-log">Console</button>
-                    <button id="rpa-btn-minimize">Thu nho</button>
+                    <button id="rpa-btn-minimize">Thu nhỏ</button>
                 </div>
             </div>
             <div class="rpa-body">
@@ -1164,7 +1164,7 @@
                     doc.status = 'ai_done';
                     success++;
                 } else {
-                    throw new Error('Van ban khong co file din kem');
+                    throw new Error('Van ban khong co file dinh kem');
                 }
             } catch (err) {
                 doc.status = 'ai_error';
