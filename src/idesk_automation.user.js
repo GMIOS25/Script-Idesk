@@ -39,11 +39,11 @@
     };
 
     const S = {
-        LEFT_LIST: '#listview-list-content div.messageListItem, #listview-process-list-list-content div.messageListItem',
+        LEFT_LIST: '#listview-process-list-list-content div.messageListItem',
         LEFT_LIST_FALLBACK: 'div.messageListItem[data-id]',
         SHOW_MORE: '#edocs-btn-hide-show-more-info',
         BOOK_INPUT: '#edocs-txt-book',
-        SAVE_TRANSFER_BTN: '#ed-new-receiver-btn-save-transfer',
+        SAVE_TRANSFER_BTN: '#ed-view-btn-transfer',
         TRANSFER_CONTAINER: '#ed-transfer-document-container',
         RESPONSIBLE_LINK: '#ed-transfer-select-user-responsible a.user-box-link',
         RESPONSIBLE_WRAP: '#ed-transfer-select-user-responsible',
@@ -169,7 +169,7 @@
             this.addEventListener('load', function() {
                 try {
                     const url = this._url || '';
-                    if (url.includes('qsreceiving.cpx')) {
+                    if (url.includes('qsprocess.cpx')) {
                         handleListResponse(JSON.parse(this.responseText));
                     } else if (url.includes('view.cpx') && url.includes('exeacode=')) {
                         handleViewResponse(JSON.parse(this.responseText));
@@ -187,11 +187,11 @@
         unsafeWindow.fetch = function(input, init) {
             const url = typeof input === 'string' ? input : (input.url || '');
             return origFetch(input, init).then(async (response) => {
-                if (url.includes('qsreceiving.cpx') || url.includes('view.cpx') || url.includes('fbyvsphere.cpx')) {
+                if (url.includes('qsprocess.cpx') || url.includes('view.cpx') || url.includes('fbyvsphere.cpx')) {
                     const clone = response.clone();
                     try {
                         const data = await clone.json();
-                        if (url.includes('qsreceiving.cpx')) handleListResponse(data);
+                        if (url.includes('qsprocess.cpx')) handleListResponse(data);
                         else if (url.includes('view.cpx')) handleViewResponse(data);
                         else if (url.includes('fbyvsphere.cpx')) handleUnitsResponse(data);
                     } catch (e) { /* silent */ }
@@ -1240,22 +1240,12 @@
         interceptXHR();
         interceptFetch();
 
-        let retries = 0;
         const waitAndStart = () => {
-            retries++;
-            const hasWidget = document.getElementById('received-document-widget') || 
-                              document.getElementById('process-list-widget') ||
-                              document.querySelector('div.messageListItem');
-
-            // Nếu chưa có widget nào và chưa quá 15 lần thử (6 giây) -> Tiếp tục chờ
-            if (!hasWidget && retries < 15) {
+            if (!document.getElementById('process-list-widget')) {
                 setTimeout(waitAndStart, 400);
                 return;
             }
-
-            if (!document.getElementById('idesk-rpa-hub')) {
-                createDashboard();
-            }
+            createDashboard();
         };
 
         if (document.readyState === 'loading') {
