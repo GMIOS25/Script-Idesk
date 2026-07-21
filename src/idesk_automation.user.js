@@ -4,9 +4,9 @@
 // @version      2.3.0
 // @description  iDesk RPA: Giao diện Minimalist UI chuẩn (không icon/emoji), Tự động chọn Sổ văn bản đến theo backend AI, Tự động match file đính kèm theo số hiệu
 // @author       Senior Developer
-// @match        https://vpdt.gialai.gov.vn/cumphumy/smartcloud/idesk6/page/paperwork/index.cpx*
-// @match        https://vpdt.gialai.gov.vn/cumphumy/smartcloud/idesk6/page/paperwork/*
-// @match        https://vpdt.gialai.gov.vn/cumphumy/smartcloud/*
+// @match        https://vpdt.gialai.gov.vn/*/smartcloud/idesk6/page/paperwork/index.cpx*
+// @match        https://vpdt.gialai.gov.vn/*/smartcloud/idesk6/page/paperwork/*
+// @match        https://vpdt.gialai.gov.vn/*/smartcloud/*
 // @icon         https://vpdt.gialai.gov.vn/favicon.ico
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
@@ -39,7 +39,7 @@
     };
 
     const S = {
-        LEFT_LIST: '#listview-list-content div.messageListItem',
+        LEFT_LIST: '#listview-list-content div.messageListItem, #listview-process-list-list-content div.messageListItem',
         LEFT_LIST_FALLBACK: 'div.messageListItem[data-id]',
         SHOW_MORE: '#edocs-btn-hide-show-more-info',
         BOOK_INPUT: '#edocs-txt-book',
@@ -1240,12 +1240,22 @@
         interceptXHR();
         interceptFetch();
 
+        let retries = 0;
         const waitAndStart = () => {
-            if (!document.getElementById('received-document-widget')) {
+            retries++;
+            const hasWidget = document.getElementById('received-document-widget') || 
+                              document.getElementById('process-list-widget') ||
+                              document.querySelector('div.messageListItem');
+
+            // Nếu chưa có widget nào và chưa quá 15 lần thử (6 giây) -> Tiếp tục chờ
+            if (!hasWidget && retries < 15) {
                 setTimeout(waitAndStart, 400);
                 return;
             }
-            createDashboard();
+
+            if (!document.getElementById('idesk-rpa-hub')) {
+                createDashboard();
+            }
         };
 
         if (document.readyState === 'loading') {
