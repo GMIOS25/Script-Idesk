@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         iDesk RPA Auto-Fill v2.3 (Minimalist Expanded Layout)
+// @name         iDesk RPA Auto-Fill v2.3 (Minimalist Pure Text)
 // @namespace    http://inet.vn/
 // @version      2.3.0
-// @description  iDesk RPA: Giao diện Minimalist UI cỡ lớn, 6 trường thông tin chính + Accordion Dropdown chi tiết, Tự động chọn đính kèm chuẩn theo số hiệu
+// @description  iDesk RPA: Giao diện Minimalist UI chuẩn (không icon/emoji), Tự động chọn Sổ văn bản đến theo backend AI, Tự động match file đính kèm theo số hiệu
 // @author       Senior Developer
 // @match        https://vpdt.gialai.gov.vn/cumphumy/smartcloud/idesk6/page/paperwork/index.cpx*
 // @match        https://vpdt.gialai.gov.vn/cumphumy/smartcloud/idesk6/page/paperwork/*
@@ -24,7 +24,7 @@
     // ============================================================
     const CONFIG = {
         BACKEND_URL: 'http://localhost:5000/api/process-doc',
-        DEFAULT_BOOK: 'Sổ văn bản đến UBND tỉnh',
+        DEFAULT_BOOK: 'Số văn bản đến UBND tỉnh',
         DELAY_MS: {
             SELECT_DOC: 1000,
             OPEN_SELECT2: 350,
@@ -59,7 +59,7 @@
     // ============================================================
     const docCache = new Map();     // Map<id, DocObject>
     const unitCache = new Map();    // Map<id, UnitObject> (từ fbyvsphere.cpx)
-    const expandedRows = new Set(); // Set<id> các bản ghi đang mở dropdown chi tiết
+    const expandedRows = new Set(); // Set<id> các bản ghi đang mở chi tiết
     let isProcessing = false;
     let logPanel = null;
 
@@ -135,20 +135,20 @@
                 return attDigitsMatch && attDigitsMatch[1] === signDigits;
             });
             if (matchedByNum) {
-                appendLog(`📎 Match file đính kèm theo số đầu "${signDigits}": ${matchedByNum.name}`);
+                appendLog(`Match file din kem theo so dau "${signDigits}": ${matchedByNum.name}`);
                 return matchedByNum;
             }
         }
 
         const matchedSigned = attachments.find(att => att.signed === 'Y');
         if (matchedSigned) {
-            appendLog(`📎 Fallback chọn file đã ký (signed="Y"): ${matchedSigned.name}`);
+            appendLog(`Fallback chon file da ky (signed="Y"): ${matchedSigned.name}`);
             return matchedSigned;
         }
 
         const pdfAttach = attachments.find(att => att.format === 'pdf' || (att.name || '').toLowerCase().endsWith('.pdf'));
         const fallback = pdfAttach || attachments[0];
-        appendLog(`📎 Fallback mặc định chọn file: ${fallback ? fallback.name : 'N/A'}`);
+        appendLog(`Fallback mac dinh chon file: ${fallback ? fallback.name : 'N/A'}`);
         return fallback;
     };
 
@@ -206,7 +206,7 @@
     // ============================================================
     const handleListResponse = (data) => {
         if (!data || !data.items) return;
-        appendLog(`📥 API qsreceiving: ${data.items.length} văn bản`);
+        appendLog(`API qsreceiving: ${data.items.length} van ban`);
         data.items.forEach(item => {
             const id = item.id.toString();
             const ed = item.edSearchDto || {};
@@ -249,7 +249,7 @@
     const handleUnitsResponse = (data) => {
         if (!data || !data.elements) return;
         data.elements.forEach(unit => unitCache.set(unit.id, unit));
-        appendLog(`🏢 API fbyvsphere: Cập nhật ${data.elements.length} đơn vị/cá nhân xử lý`);
+        appendLog(`API fbyvsphere: Cap nhat ${data.elements.length} don vi/ca nhan xu ly`);
     };
 
     // ============================================================
@@ -258,7 +258,7 @@
     const downloadPDF = (contentUid, fileName) => {
         return new Promise((resolve, reject) => {
             const url = `/cumphumy/smartcloud/docx/download.cpx?docID=${contentUid}&view=pdf&t=${Date.now()}`;
-            setStatus(`Đang tải PDF: ${fileName}...`);
+            setStatus(`Dang tai PDF: ${fileName}...`);
 
             GM_xmlhttpRequest({
                 method: 'GET',
@@ -274,7 +274,7 @@
                         reject(new Error(`Download HTTP ${resp.status}`));
                     }
                 },
-                onerror: (err) => reject(new Error(`Lỗi kết nối download: ${err}`)),
+                onerror: (err) => reject(new Error(`Loi ket noi download: ${err}`)),
                 ontimeout: () => reject(new Error('Timeout download PDF'))
             });
         });
@@ -301,7 +301,7 @@
                     doc = docCache.get(id.toString()) || doc;
                 }
             } catch (e) {
-                appendLog(`⚠️ Fetch view.cpx cho ${id} lỗi: ${e.message}`);
+                appendLog(`Fetch view.cpx cho ${id} loi: ${e.message}`);
             }
         }
 
@@ -311,7 +311,7 @@
     const callAIBackend = async (doc) => {
         const targetAttach = selectAttachment(doc);
         if (!targetAttach) {
-            throw new Error(`Không tìm thấy file đính kèm phù hợp cho VB "${doc.signNumber}"`);
+            throw new Error(`Khong tim thay file din kem phu hop cho VB "${doc.signNumber}"`);
         }
 
         const pdfFile = await downloadPDF(targetAttach.contentUid, targetAttach.name);
@@ -330,7 +330,7 @@
         formData.append('metadata', JSON.stringify(metadata));
 
         return new Promise((resolve, reject) => {
-            setStatus(`📤 Gửi "${doc.signNumber}" đến AI...`);
+            setStatus(`Gui "${doc.signNumber}" den AI...`);
 
             GM_xmlhttpRequest({
                 method: 'POST',
@@ -340,30 +340,30 @@
                     if (resp.status === 200) {
                         try {
                             const result = JSON.parse(resp.responseText);
-                            appendLog(`✅ AI phản hồi cho "${doc.signNumber}": ${JSON.stringify(result)}`);
+                            appendLog(`AI phan hoi cho "${doc.signNumber}": ${JSON.stringify(result)}`);
                             resolve(result);
                         } catch (e) {
-                            reject(new Error(`Parse JSON lỗi: ${e.message}`));
+                            reject(new Error(`Parse JSON loi: ${e.message}`));
                         }
                     } else {
                         reject(new Error(`Backend HTTP ${resp.status}: ${resp.responseText}`));
                     }
                 },
-                onerror: () => reject(new Error(`Không kết nối được AI (${CONFIG.BACKEND_URL})`)),
-                ontimeout: () => reject(new Error('Timeout gọi AI backend'))
+                onerror: () => reject(new Error(`Khong ket noi duoc AI (${CONFIG.BACKEND_URL})`)),
+                ontimeout: () => reject(new Error('Timeout goi AI backend'))
             });
         });
     };
 
     // ============================================================
-    // 8. IDESK FORM AUTOMATION
+    // 8. IDESK FORM AUTOMATION (DYNAMIC SỔ VĂN BẢN ĐẾN FROM BACKEND)
     // ============================================================
     const selectBook = async (bookName) => {
         const container = getSelect2Container(S.BOOK_INPUT);
-        if (!container) throw new Error('Không thấy Select2 của Sổ văn bản đến');
+        if (!container) throw new Error('Khong thay Select2 cua So van ban den');
 
         const trigger = container.querySelector('.select2-choice');
-        if (!trigger) throw new Error('Không tìm thấy nút chọn Sổ văn bản');
+        if (!trigger) throw new Error('Khong tim thay nut chon So van ban');
 
         const currentText = trigger.querySelector('.select2-chosen')?.textContent?.trim() || '';
         if (currentText === bookName) return;
@@ -372,7 +372,7 @@
         await sleep(CONFIG.DELAY_MS.OPEN_SELECT2);
 
         const drop = document.getElementById('select2-drop');
-        if (!drop) throw new Error('Không mở được dropdown Select2');
+        if (!drop) throw new Error('Khong mo duoc dropdown Select2');
 
         const items = drop.querySelectorAll('ul.select2-results li');
         let target = Array.from(items).find(li => li.textContent.trim() === bookName) ||
@@ -382,10 +382,10 @@
         if (target) {
             target.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
             await sleep(CONFIG.DELAY_MS.AFTER_BOOK_SELECT);
-            appendLog(`✅ Đã chọn sổ: "${target.textContent.trim()}"`);
+            appendLog(`Da chon so van ban den: "${target.textContent.trim()}"`);
         } else {
             document.body.click();
-            throw new Error('Không tìm thấy sổ văn bản!');
+            throw new Error('Khong tim thay so van ban den phu hop!');
         }
     };
 
@@ -439,8 +439,8 @@
             }
         }
 
-        if (clicked) appendLog(`✅ Đã chọn "${targetName}"`);
-        else appendLog(`⚠️ Không chọn được "${targetName}" trong popup`);
+        if (clicked) appendLog(`Da chon "${targetName}"`);
+        else appendLog(`Khong chon duoc "${targetName}" trong popup`);
 
         const closeBtn = popup.querySelector('button.close, .close, [data-dismiss="modal"]');
         if (closeBtn) closeBtn.click();
@@ -452,7 +452,7 @@
 
     const autoFillAndSubmit = async (docId, aiData) => {
         const itemEl = document.querySelector(`.messageListItem[data-id="${docId}"]`);
-        if (!itemEl) throw new Error(`Không tìm thấy VB ID ${docId}`);
+        if (!itemEl) throw new Error(`Khong tim thay VB ID ${docId}`);
 
         if (!itemEl.classList.contains('selected')) {
             itemEl.click();
@@ -460,25 +460,28 @@
         }
 
         const showMoreBtn = document.querySelector(S.SHOW_MORE);
-        if (showMoreBtn && showMoreBtn.textContent.includes('Hiển thị thêm')) {
+        if (showMoreBtn && showMoreBtn.textContent.includes('Hien thi them')) {
             showMoreBtn.click();
             await sleep(200);
         }
 
-        await selectBook(CONFIG.DEFAULT_BOOK);
+        // Dynamic Sổ văn bản đến phân tích từ Backend
+        const targetBook = aiData.so_van_ban || aiData.book_name || CONFIG.DEFAULT_BOOK;
+        appendLog(`Chon So van ban den: ${targetBook}`);
+        await selectBook(targetBook);
 
         const saveTransferBtn = document.querySelector(S.SAVE_TRANSFER_BTN);
-        if (!saveTransferBtn) throw new Error('Không tìm thấy nút "Lưu và chuyển"');
+        if (!saveTransferBtn) throw new Error('Khong tim thay nut "Luu va chuyen"');
         if (saveTransferBtn.disabled) {
             for (let i = 0; i < 10; i++) {
                 await sleep(500);
                 if (!saveTransferBtn.disabled) break;
             }
         }
-        if (saveTransferBtn.disabled) throw new Error('Nút "Lưu và chuyển" không enable!');
+        if (saveTransferBtn.disabled) throw new Error('Nut "Luu va chuyen" khong enable!');
 
         saveTransferBtn.click();
-        appendLog('💾 Đã click "Lưu và chuyển"');
+        appendLog('Da click "Luu va chuyen"');
         await sleep(CONFIG.DELAY_MS.CLICK_SAVE_TRANSFER);
 
         if (!document.querySelector(S.TRANSFER_CONTAINER)) {
@@ -488,12 +491,12 @@
             }
         }
         if (!document.querySelector(S.TRANSFER_CONTAINER)) {
-            throw new Error('Không thấy form Thông tin xử lý!');
+            throw new Error('Khong thay form Thong tin xu ly!');
         }
 
         const mainUnit = aiData.don_vi_xu_ly || aiData.processing_unit;
         if (mainUnit) {
-            appendLog(`👤 Xử lý chính: ${mainUnit}`);
+            appendLog(`Xu ly chinh: ${mainUnit}`);
             await selectTreeItem(S.RESPONSIBLE_LINK, S.RESPONSIBLE_WRAP, mainUnit);
         }
 
@@ -525,12 +528,12 @@
                 dateInput.dispatchEvent(new Event('input', { bubbles: true }));
                 dateInput.dispatchEvent(new Event('change', { bubbles: true }));
                 dateInput.dispatchEvent(new Event('blur', { bubbles: true }));
-                appendLog(`📅 Hạn xử lý: ${deadlineDate} (+${daysNum} ngày)`);
+                appendLog(`Han xu ly: ${deadlineDate} (+${daysNum} ngay)`);
             }
         }
 
         const agreeBtn = document.querySelector(S.AGREE_BTN);
-        if (!agreeBtn) throw new Error('Không tìm thấy nút "Đồng ý"!');
+        if (!agreeBtn) throw new Error('Khong tim thay nut "Dong y"!');
         if (agreeBtn.disabled) {
             for (let i = 0; i < 5; i++) {
                 await sleep(500);
@@ -538,14 +541,14 @@
             }
         }
         agreeBtn.click();
-        appendLog('✅ Đã click "Đồng ý"');
+        appendLog('Da click "Dong y"');
         await sleep(CONFIG.DELAY_MS.AFTER_SUBMIT);
 
         return true;
     };
 
     const scanList = async (retries = 3) => {
-        setStatus('🔍 Đang quét danh sách văn bản...');
+        setStatus('Dang quet danh sach van ban...');
         let items = getVisibleItems();
         let attempt = 0;
         while (items.length === 0 && attempt < retries) {
@@ -555,7 +558,7 @@
         }
 
         if (items.length === 0) {
-            setStatus('⚠️ Không tìm thấy văn bản.');
+            setStatus('Khong tim thay van ban.');
             return 0;
         }
 
@@ -577,18 +580,18 @@
         });
 
         updateDashboard();
-        setStatus(`📋 Đã quét: ${docCache.size} VB (${newCount} mới)`);
+        setStatus(`Da quet: ${docCache.size} VB (${newCount} moi)`);
         return items.length;
     };
 
     // ============================================================
-    // 9. MINIMALIST UI DASHBOARD SYSTEM (EXPANDED WIDGET & ACCORDION ROWS)
+    // 9. MINIMALIST UI DASHBOARD SYSTEM (PURE TEXT, ZERO ICONS)
     // ============================================================
     const createDashboard = () => {
         if (document.getElementById('idesk-rpa-hub')) return;
 
         GM_addStyle(`
-            /* ===== iDesk RPA Minimalist UI v2.3 ===== */
+            /* ===== iDesk RPA Minimalist UI v2.3 (Pure Text) ===== */
             #idesk-rpa-hub {
                 position: fixed !important;
                 bottom: 20px !important;
@@ -598,15 +601,15 @@
                 background: #121212 !important;
                 border: 1px solid #282828 !important;
                 border-radius: 8px !important;
-                box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45) !important;
+                box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35) !important;
                 color: #EAEAEA !important;
                 font-family: 'SF Pro Display', 'Geist Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
                 z-index: 999999 !important;
                 display: flex !important;
                 flex-direction: column !important;
                 overflow: hidden !important;
-                font-size: 14px !important;
-                line-height: 1.6 !important;
+                font-size: 13px !important;
+                line-height: 1.5 !important;
                 transition: width 0.25s ease, height 0.25s ease, border-radius 0.25s ease !important;
                 user-select: none !important;
             }
@@ -614,8 +617,8 @@
             #idesk-rpa-hub * { box-sizing: border-box !important; }
 
             #idesk-rpa-hub.minimized {
-                width: 380px !important;
-                height: 46px !important;
+                width: 340px !important;
+                height: 42px !important;
                 border-radius: 6px !important;
             }
             #idesk-rpa-hub.minimized .rpa-body,
@@ -625,28 +628,28 @@
                 display: flex !important;
                 justify-content: space-between !important;
                 align-items: center !important;
-                padding: 10px 18px !important;
+                padding: 10px 16px !important;
                 background: #181818 !important;
                 border-bottom: 1px solid #262626 !important;
                 cursor: grab !important;
-                min-height: 46px !important;
+                min-height: 42px !important;
             }
             .rpa-header:active { cursor: grabbing !important; }
 
             .rpa-title {
                 font-weight: 600 !important;
-                font-size: 15px !important;
+                font-size: 14px !important;
                 display: flex !important;
                 align-items: center !important;
-                gap: 10px !important;
+                gap: 8px !important;
                 color: #FFFFFF !important;
                 letter-spacing: -0.01em !important;
             }
             .rpa-title .badge-count {
                 background: #262626 !important;
                 color: #A1A1AA !important;
-                font-size: 12px !important;
-                padding: 2px 9px !important;
+                font-size: 11px !important;
+                padding: 1px 8px !important;
                 border-radius: 9999px !important;
                 font-family: 'Geist Mono', 'SF Mono', monospace !important;
             }
@@ -659,7 +662,7 @@
                 cursor: pointer !important;
                 padding: 4px 10px !important;
                 border-radius: 4px !important;
-                font-size: 12px !important;
+                font-size: 11px !important;
                 transition: all 0.15s !important;
             }
             .rpa-header-actions button:hover {
@@ -682,7 +685,6 @@
                 align-items: center !important;
             }
 
-            /* Minimalist Large Buttons */
             .rpa-btn {
                 background: #1A1A1A !important;
                 border: 1px solid #333333 !important;
@@ -694,7 +696,6 @@
                 cursor: pointer !important;
                 display: inline-flex !important;
                 align-items: center !important;
-                gap: 6px !important;
                 transition: background 0.15s, transform 0.1s !important;
             }
             .rpa-btn:hover { background: #262626 !important; color: #FFFFFF !important; }
@@ -723,7 +724,7 @@
             }
             .rpa-btn-outline:hover { border-color: #444444 !important; color: #FFFFFF !important; }
 
-            /* Minimalist Table & Expandable Accordion Rows */
+            /* Table & Accordion Rows */
             .rpa-table-wrap {
                 flex: 1 !important;
                 overflow-y: auto !important;
@@ -737,7 +738,7 @@
             .rpa-table {
                 width: 100% !important;
                 border-collapse: collapse !important;
-                font-size: 14px !important;
+                font-size: 13px !important;
             }
             .rpa-table th {
                 background: #181818 !important;
@@ -746,9 +747,9 @@
                 padding: 10px 12px !important;
                 position: sticky !important;
                 top: 0 !important;
-                z-index: 10 !important;
+                z-index: 1 !important;
                 border-bottom: 1px solid #262626 !important;
-                font-size: 12px !important;
+                font-size: 11px !important;
                 text-transform: uppercase !important;
                 letter-spacing: 0.05em !important;
                 text-align: left !important;
@@ -774,44 +775,37 @@
                 color: #FFFFFF !important;
                 font-size: 13px !important;
             }
-            .rpa-doc-subject {
-                font-weight: 400 !important;
+            .rpa-doc-text {
+                max-width: 320px !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+                white-space: nowrap !important;
                 color: #D4D4D8 !important;
                 line-height: 1.5 !important;
             }
 
-            /* Expand/Collapse Chevron Indicator */
-            .rpa-toggle-icon {
-                display: inline-flex !important;
-                align-items: center !important;
-                justify-content: center !important;
-                width: 20px !important;
-                height: 20px !important;
-                color: #888888 !important;
-                transition: transform 0.2s ease !important;
+            .rpa-toggle-text {
+                font-family: 'Geist Mono', 'SF Mono', monospace !important;
                 font-size: 11px !important;
-                margin-left: 6px !important;
-            }
-            .rpa-row-main.expanded .rpa-toggle-icon {
-                transform: rotate(180deg) !important;
-                color: #FFFFFF !important;
+                color: #71717A !important;
             }
 
             /* Detail Drawer Dropdown Panel */
             .rpa-row-detail {
                 background: #161618 !important;
-            }
-            .rpa-row-detail td {
-                padding: 0 !important;
                 border-bottom: 1px solid #262626 !important;
             }
-            .rpa-detail-box {
+            .rpa-row-detail td {
                 padding: 16px 20px !important;
+            }
+            .rpa-detail-grid {
                 display: grid !important;
                 grid-template-columns: repeat(3, 1fr) !important;
-                gap: 16px !important;
-                border-top: 1px solid #262626 !important;
-                background: #161618 !important;
+                gap: 14px 24px !important;
+                background: #111113 !important;
+                padding: 16px !important;
+                border-radius: 6px !important;
+                border: 1px solid #242427 !important;
             }
             .rpa-detail-field {
                 display: flex !important;
@@ -825,18 +819,14 @@
                 font-size: 11px !important;
                 text-transform: uppercase !important;
                 letter-spacing: 0.05em !important;
-                color: #888888 !important;
-                font-weight: 600 !important;
+                color: #71717A !important;
+                font-weight: 500 !important;
             }
             .rpa-detail-value {
                 font-size: 13px !important;
-                color: #EEEEEE !important;
-                background: #1F1F22 !important;
-                border: 1px solid #2A2A2E !important;
-                border-radius: 4px !important;
-                padding: 8px 12px !important;
+                color: #E4E4E7 !important;
                 line-height: 1.5 !important;
-                min-height: 36px !important;
+                word-break: break-word !important;
             }
             .rpa-detail-value.highlight {
                 color: #FFFFFF !important;
@@ -865,14 +855,14 @@
                 display: flex !important;
                 justify-content: space-between !important;
                 align-items: center !important;
-                padding: 8px 18px !important;
+                padding: 8px 16px !important;
                 background: #181818 !important;
                 border-top: 1px solid #262626 !important;
-                gap: 14px !important;
+                gap: 16px !important;
             }
             .rpa-status-text {
                 font-size: 12px !important;
-                color: #888888 !important;
+                color: #A1A1AA !important;
                 flex: 1 !important;
                 overflow: hidden !important;
                 text-overflow: ellipsis !important;
@@ -894,7 +884,7 @@
             }
             .rpa-progress-text {
                 font-size: 11px !important;
-                color: #888888 !important;
+                color: #A1A1AA !important;
                 font-family: 'Geist Mono', 'SF Mono', monospace !important;
             }
 
@@ -916,7 +906,7 @@
                 font-family: 'Geist Mono', 'SF Mono', monospace !important;
                 line-height: 1.6 !important;
             }
-            .rpa-log-time { color: #555555 !important; margin-right: 6px !important; }
+            .rpa-log-time { color: #555555 !important; margin-right: 8px !important; }
         `);
 
         const hub = document.createElement('div');
@@ -927,39 +917,38 @@
                     iDesk RPA <span class="badge-count" id="rpa-doc-count">0</span>
                 </div>
                 <div class="rpa-header-actions">
-                    <button id="rpa-btn-toggle-log" title="Log">Console Log</button>
-                    <button id="rpa-btn-minimize" title="Thu nhỏ">Thu nhỏ</button>
+                    <button id="rpa-btn-toggle-log">Console</button>
+                    <button id="rpa-btn-minimize">Thu nho</button>
                 </div>
             </div>
             <div class="rpa-body">
                 <div class="rpa-toolbar">
-                    <button class="rpa-btn rpa-btn-primary" id="rpa-btn-scan">🔄 Quét &amp; Gửi AI</button>
-                    <button class="rpa-btn rpa-btn-purple" id="rpa-btn-fill-all">⚡ Tự động điền</button>
-                    <button class="rpa-btn rpa-btn-outline" id="rpa-btn-select-all">☑ Chọn / Bỏ chọn</button>
+                    <button class="rpa-btn rpa-btn-primary" id="rpa-btn-scan">Quét &amp; Gửi AI</button>
+                    <button class="rpa-btn rpa-btn-purple" id="rpa-btn-fill-all">Tự động điền</button>
+                    <button class="rpa-btn rpa-btn-outline" id="rpa-btn-select-all">Chọn / Bỏ chọn</button>
                 </div>
                 <div class="rpa-table-wrap">
                     <table class="rpa-table" id="rpa-doc-table">
                         <thead>
                             <tr>
-                                <th style="width:36px;text-align:center;"><input type="checkbox" id="rpa-check-all" checked></th>
-                                <th style="width:160px;">Số hiệu</th>
-                                <th style="width:140px;">Loại VB</th>
-                                <th style="width:200px;">CQ Ban hành</th>
-                                <th style="width:120px;">Ngày VB</th>
-                                <th style="width:140px;">Người ký</th>
-                                <th>Trích yếu</th>
-                                <th style="width:130px;text-align:center;">Trạng thái</th>
+                                <th style="width:30px;"><input type="checkbox" id="rpa-check-all" checked></th>
+                                <th style="width:30px;"></th>
+                                <th style="width:130px;">So hieu VB</th>
+                                <th>Trich yeu VB</th>
+                                <th style="width:180px;">DV xu ly chinh</th>
+                                <th style="width:90px;">Han TH</th>
+                                <th style="width:100px;">Trang thai</th>
                             </tr>
                         </thead>
-                        <tbody id="rpa-doc-tbody">
-                            <tr><td colspan="8" style="text-align:center;color:#666;padding:35px;">Nhấn "Quét & Gửi AI" để bắt đầu...</td></tr>
+                        <tbody>
+                            <tr><td colspan="7" style="text-align:center;color:#666;padding:35px;">Nhan "Quet & Gui AI" de bat dau...</td></tr>
                         </tbody>
                     </table>
                 </div>
                 <div class="rpa-log-panel" id="rpa-log-panel"><div id="rpa-log-body"></div></div>
             </div>
             <div class="rpa-footer">
-                <span class="rpa-status-text" id="rpa-footer-status">Sẵn sàng. Nhấn "Quét & Gửi AI" để bắt đầu.</span>
+                <span class="rpa-status-text" id="rpa-footer-status">San sang. Nhan "Quét & Gửi AI" de bat dau.</span>
                 <div class="rpa-progress-wrap">
                     <span class="rpa-progress-text" id="rpa-progress-text">0/0</span>
                     <div class="rpa-progress-bar"><div class="rpa-progress-fill" id="rpa-progress-fill"></div></div>
@@ -984,21 +973,19 @@
             allCb.dispatchEvent(new Event('change'));
         });
 
-        // Event Delegation cho Row Click Dropdown Toggle
-        document.getElementById('rpa-doc-tbody').addEventListener('click', (e) => {
+        // Event delegation cho click row tong the toggle drawer chi tiet
+        document.querySelector('#rpa-doc-table tbody').addEventListener('click', (e) => {
             if (e.target.closest('input[type="checkbox"]')) return;
             const mainRow = e.target.closest('.rpa-row-main');
             if (mainRow) {
                 const id = mainRow.getAttribute('data-id');
-                if (id) {
-                    if (expandedRows.has(id)) expandedRows.delete(id);
-                    else expandedRows.add(id);
-                    updateDashboard();
-                }
+                if (expandedRows.has(id)) expandedRows.delete(id);
+                else expandedRows.add(id);
+                updateDashboard();
             }
         });
 
-        appendLog('🚀 Khởi tạo iDesk RPA Minimalist UI v2.3 (Bản ghi cỡ lớn)');
+        appendLog('Khoi tao iDesk RPA Minimalist UI v2.3');
     };
 
     const makeDraggable = (elmnt) => {
@@ -1041,93 +1028,93 @@
     };
 
     const updateDashboard = () => {
-        const tbody = document.getElementById('rpa-doc-tbody');
+        const tbody = document.querySelector('#rpa-doc-table tbody');
         if (!tbody) return;
 
         const countEl = document.getElementById('rpa-doc-count');
         if (countEl) countEl.textContent = docCache.size.toString();
 
         if (docCache.size === 0) {
-            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:#666;padding:35px;">Nhấn "Quét & Gửi AI" để bắt đầu...</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:#666;padding:35px;">Nhan "Quet & Gui AI" de bat dau...</td></tr>`;
             return;
         }
 
         let html = '';
         docCache.forEach((doc, id) => {
             const statusMap = {
-                'idle': ['rpa-badge-idle', 'Chưa gửi'],
-                'pending': ['rpa-badge-pending', 'Đang gửi'],
-                'ai_done': ['rpa-badge-success', 'Đã phân tích'],
-                'ai_error': ['rpa-badge-error', 'Lỗi AI'],
-                'fill_done': ['rpa-badge-sent', 'Đã điền'],
-                'fill_error': ['rpa-badge-error', 'Lỗi điền'],
+                'idle': ['rpa-badge-idle', 'Chua gui'],
+                'pending': ['rpa-badge-pending', 'Dang gui'],
+                'ai_done': ['rpa-badge-success', 'Da phan tich'],
+                'ai_error': ['rpa-badge-error', 'Loi AI'],
+                'fill_done': ['rpa-badge-sent', 'Da dien'],
+                'fill_error': ['rpa-badge-error', 'Loi dien'],
             };
             const s = statusMap[doc.status] || statusMap.idle;
             const isExpanded = expandedRows.has(id);
 
             const ai = doc.aiData || {};
-            const summary = ai.tom_tat || ai.summary || 'Chưa có thông tin phân tích AI';
-            const unit = ai.don_vi_xu_ly || ai.processing_unit || 'Chưa phân công';
-            const leader = ai.lanh_dao_theo_doi || ai.monitoring_leader || 'Chưa phân công';
-            const days = ai.thoi_han_thuc_hien || ai.implementation_deadline ? `${ai.thoi_han_thuc_hien || ai.implementation_deadline} ngày` : '---';
+            const summary = ai.tom_tat || ai.summary || '---';
+            const bookName = ai.so_van_ban || ai.book_name || '---';
+            const mainUnit = ai.don_vi_xu_ly || ai.processing_unit || '---';
+            const leader = ai.lanh_dao_theo_doi || ai.monitoring_leader || '---';
+            const days = ai.thoi_han_thuc_hien || ai.implementation_deadline;
+            const daysStr = days ? `${days} ngay` : '---';
             const coUnits = ai.don_vi_phoi_hop || ai.coordinating_units;
-            const coUnitsStr = (Array.isArray(coUnits) && coUnits.length > 0) ? coUnits.join(', ') : 'Không có';
-            const notes = ai.ghi_chu || ai.notes || 'Không có';
-            const targetAttach = selectAttachment(doc);
-            const fileName = targetAttach ? targetAttach.name : 'Chưa chọn file';
+            const coUnitsStr = (Array.isArray(coUnits) && coUnits.length > 0) ? coUnits.join(', ') : '---';
+            const notes = ai.ghi_chu || ai.notes || '---';
 
-            // Main Row (6 main fields)
             html += `
                 <tr data-id="${id}" class="rpa-row-main ${isExpanded ? 'expanded' : ''}">
-                    <td style="text-align:center;"><input type="checkbox" class="rpa-row-check" data-id="${id}" ${doc.status === 'fill_done' ? '' : 'checked'}></td>
-                    <td><div class="rpa-doc-code">${doc.signNumber || '---'}</div></td>
-                    <td><div>${doc.category || '---'}</div></td>
-                    <td><div>${doc.author || '---'}</div></td>
-                    <td><div style="font-family:'Geist Mono',monospace;font-size:13px;">${doc.docDateStr || '---'}</div></td>
-                    <td><div>${doc.signer || '---'}</div></td>
-                    <td><div class="rpa-doc-subject">${doc.subject || '---'}</div></td>
-                    <td style="text-align:center;">
-                        <span class="rpa-badge ${s[0]}">${s[1]}</span>
-                        <span class="rpa-toggle-icon">▼</span>
-                    </td>
+                    <td><input type="checkbox" class="rpa-row-check" data-id="${id}" ${doc.status === 'fill_done' ? '' : 'checked'}></td>
+                    <td><span class="rpa-toggle-text">${isExpanded ? '[-]' : '[+]'}</span></td>
+                    <td><div class="rpa-doc-code" title="${doc.signNumber}">${doc.signNumber || '---'}</div></td>
+                    <td><div class="rpa-doc-text" title="${doc.subject}">${doc.subject || '---'}</div></td>
+                    <td><div class="rpa-doc-text" title="${mainUnit}">${mainUnit}</div></td>
+                    <td><div class="rpa-doc-code" title="${daysStr}">${daysStr}</div></td>
+                    <td><span class="rpa-badge ${s[0]}">${s[1]}</span></td>
                 </tr>
             `;
 
-            // Expanded Dropdown Detail Panel Row
             if (isExpanded) {
                 html += `
-                    <tr class="rpa-row-detail" data-id="${id}">
-                        <td colspan="8">
-                            <div class="rpa-detail-box">
+                    <tr data-id="${id}" class="rpa-row-detail">
+                        <td colspan="7">
+                            <div class="rpa-detail-grid">
+                                <div class="rpa-detail-field span-full">
+                                    <span class="rpa-detail-label">Tom tat AI</span>
+                                    <span class="rpa-detail-value highlight">${summary}</span>
+                                </div>
+                                <div class="rpa-detail-field">
+                                    <span class="rpa-detail-label">So van ban den (AI chon)</span>
+                                    <span class="rpa-detail-value highlight">${bookName}</span>
+                                </div>
+                                <div class="rpa-detail-field">
+                                    <span class="rpa-detail-label">Don vi xu ly chinh</span>
+                                    <span class="rpa-detail-value highlight">${mainUnit}</span>
+                                </div>
+                                <div class="rpa-detail-field">
+                                    <span class="rpa-detail-label">Lanh dao theo doi</span>
+                                    <span class="rpa-detail-value">${leader}</span>
+                                </div>
+                                <div class="rpa-detail-field">
+                                    <span class="rpa-detail-label">Co quan ban hanh</span>
+                                    <span class="rpa-detail-value">${doc.author || '---'}</span>
+                                </div>
+                                <div class="rpa-detail-field">
+                                    <span class="rpa-detail-label">Nguoi ky / Ngay VB</span>
+                                    <span class="rpa-detail-value">${doc.signer || '---'} (${doc.docDateStr || '---'})</span>
+                                </div>
+                                <div class="rpa-detail-field">
+                                    <span class="rpa-detail-label">Loai van ban</span>
+                                    <span class="rpa-detail-value">${doc.category || '---'}</span>
+                                </div>
                                 <div class="rpa-detail-field span-2">
-                                    <span class="rpa-detail-label">📋 Tóm tắt nội dung (AI)</span>
-                                    <div class="rpa-detail-value highlight">${summary}</div>
+                                    <span class="rpa-detail-label">Don vi phoi hop</span>
+                                    <span class="rpa-detail-value">${coUnitsStr}</span>
                                 </div>
                                 <div class="rpa-detail-field">
-                                    <span class="rpa-detail-label">📎 File PDF đính kèm chọn tải</span>
-                                    <div class="rpa-detail-value highlight" style="font-family:'Geist Mono',monospace;">${fileName}</div>
-                                </div>
-
-                                <div class="rpa-detail-field">
-                                    <span class="rpa-detail-label">👤 Đơn vị / Người xử lý chính</span>
-                                    <div class="rpa-detail-value highlight">${unit}</div>
-                                </div>
-                                <div class="rpa-detail-field">
-                                    <span class="rpa-detail-label">👔 Lãnh đạo theo dõi</span>
-                                    <div class="rpa-detail-value">${leader}</div>
-                                </div>
-                                <div class="rpa-detail-field">
-                                    <span class="rpa-detail-label">📅 Hạn thực hiện</span>
-                                    <div class="rpa-detail-value highlight">${days}</div>
-                                </div>
-
-                                <div class="rpa-detail-field span-2">
-                                    <span class="rpa-detail-label">👥 Đơn vị phối hợp xử lý</span>
-                                    <div class="rpa-detail-value">${coUnitsStr}</div>
-                                </div>
-                                <div class="rpa-detail-field">
-                                    <span class="rpa-detail-label">📝 Ghi chú</span>
-                                    <div class="rpa-detail-value">${notes}</div>
+                                    <span class="rpa-detail-label">Ghi chu</span>
+                                    <span class="rpa-detail-value">${notes}</span>
                                 </div>
                             </div>
                         </td>
@@ -1135,6 +1122,7 @@
                 `;
             }
         });
+
         tbody.innerHTML = html;
     };
 
@@ -1142,7 +1130,7 @@
     // 10. CONTROLLERS
     // ============================================================
     const scanAndSendAll = async () => {
-        if (isProcessing) return alert('Đang xử lý, vui lòng chờ!');
+        if (isProcessing) return alert('Dang xu ly, vui long cho!');
 
         const found = await scanList(4);
         if (!found) return;
@@ -1151,7 +1139,7 @@
         docCache.forEach((doc, id) => { if (doc.status === 'idle') pendingIds.push(id); });
 
         if (pendingIds.length === 0) {
-            setStatus(`📋 Không có văn bản mới cần gửi AI.`);
+            setStatus(`Khong co van ban moi can gui AI.`);
             return;
         }
 
@@ -1176,27 +1164,27 @@
                     doc.status = 'ai_done';
                     success++;
                 } else {
-                    throw new Error('Văn bản không có file đính kèm');
+                    throw new Error('Van ban khong co file din kem');
                 }
             } catch (err) {
                 doc.status = 'ai_error';
                 errors++;
-                appendLog(`❌ ${doc.signNumber}: ${err.message}`);
+                appendLog(`${doc.signNumber}: ${err.message}`);
             }
             updateDashboard();
             updateProgress(i + 1, total);
         }
 
         isProcessing = false;
-        setStatus(`✅ Hoàn tất AI: ${success} thành công, ${errors} lỗi`);
+        setStatus(`Hoan tat AI: ${success} thanh cong, ${errors} loi`);
         updateProgress(total, total);
     };
 
     const runFillOnAll = async () => {
-        if (isProcessing) return alert('Đang xử lý, vui lòng chờ!');
+        if (isProcessing) return alert('Dang xu ly, vui long cho!');
 
         const checkboxes = document.querySelectorAll('.rpa-row-check:checked');
-        if (checkboxes.length === 0) return alert('Hãy chọn ít nhất 1 văn bản!');
+        if (checkboxes.length === 0) return alert('Hay chon it nhat 1 van ban!');
 
         isProcessing = true;
         let success = 0, errors = 0;
@@ -1213,7 +1201,7 @@
                 continue;
             }
 
-            setStatus(`⚡ Đang điền: ${doc.signNumber || id} (${i + 1}/${total})`);
+            setStatus(`Dang dien: ${doc.signNumber || id} (${i + 1}/${total})`);
             updateProgress(i, total);
 
             try {
@@ -1224,7 +1212,7 @@
             } catch (err) {
                 doc.status = 'fill_error';
                 errors++;
-                appendLog(`❌ Lỗi ${doc.signNumber}: ${err.message}`);
+                appendLog(`Loi ${doc.signNumber}: ${err.message}`);
             }
             updateDashboard();
             updateProgress(i + 1, total);
@@ -1232,7 +1220,7 @@
         }
 
         isProcessing = false;
-        setStatus(`🏁 Kết thúc tự động điền: ${success}/${total} thành công`);
+        setStatus(`Ket thuc tu dong dien: ${success}/${total} thanh cong`);
         updateProgress(total, total);
     };
 
