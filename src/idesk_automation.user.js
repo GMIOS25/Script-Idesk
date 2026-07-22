@@ -12,8 +12,8 @@
 // @grant        GM_addStyle
 // @grant        unsafeWindow
 // @run-at       document-end
-// @downloadURL  https://raw.githubusercontent.com/GMIOS25/Script-Idesk/features/chairperson/src/idesk_automation.user.js
-// @updateURL    https://raw.githubusercontent.com/GMIOS25/Script-Idesk/features/chairperson/src/idesk_automation.user.js
+// @downloadURL  https://raw.githubusercontent.com/GMIOS25/Script-Idesk/features/chairperson/dist/idesk_automation.user.js
+// @updateURL    https://raw.githubusercontent.com/GMIOS25/Script-Idesk/features/chairperson/dist/idesk_automation.user.js
 // ==/UserScript==
 
 // ==============================================================================

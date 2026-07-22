@@ -121,7 +121,7 @@ export const updateDashboard = () => {
     }
 
     let html = '';
-    docCache.forEach((doc, id) => {
+        docCache.forEach((doc, id) => {
         const statusMap = {
             'idle': ['rpa-badge-idle', 'Chưa gửi'],
             'pending': ['rpa-badge-pending', 'Đang gửi'],
