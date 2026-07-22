@@ -1,0 +1,12 @@
+{
+  "name": "script-idesk",
+  "version": "3.0.0",
+  "description": "iDesk RPA Auto-Fill UserScript",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}
