@@ -15,7 +15,14 @@ async function build() {
     });
 
     const code = result.outputFiles[0].text;
-    const finalScript = metaContent.trim() + '\n\n' + code;
+    const warningBanner = `
+// ==============================================================================
+// ⚠️ FILE TỰ ĐỘNG SINH RA (AUTO-GENERATED BUNDLE). KHÔNG SỬA TRỰC TIẾP FILE NÀY!
+// 💡 Vui lòng sửa code tại các file module trong thư mục src/ (vd: src/config.js,
+//    src/services/ai.js, src/ui/dashboard.js...), sau đó gõ "pnpm run build".
+// ==============================================================================
+`;
+    const finalScript = metaContent.trim() + '\n' + warningBanner + '\n' + code;
 
     const targetPath = path.join(process.cwd(), 'src', 'idesk_automation.user.js');
     fs.writeFileSync(targetPath, finalScript, 'utf-8');

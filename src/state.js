@@ -1,6 +1,5 @@
 export const docCache = new Map();     // Map<id, DocObject>
 export const unitCache = new Map();    // Map<id, UnitObject> (từ fbyvsphere.cpx)
-export const expandedRows = new Set(); // Set<id> các bản ghi đang mở chi tiết
 
 export const state = {
     isProcessing: false,

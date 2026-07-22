@@ -1,15 +1,15 @@
 export const CSS_STYLES = `
-    /* ===== iDesk RPA Minimalist UI v2.3 (Pure Text) ===== */
+    /* ===== iDesk RPA Minimalist UI v3.0 (Bento Card Feed - Direct Scroll) ===== */
     #idesk-rpa-hub {
         position: fixed !important;
         bottom: 20px !important;
         right: 20px !important;
-        width: min(1680px, 95vw) !important;
-        height: min(680px, 85vh) !important;
+        width: min(1200px, 95vw) !important;
+        height: min(780px, 88vh) !important;
         background: #121212 !important;
         border: 1px solid #282828 !important;
         border-radius: 8px !important;
-        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35) !important;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4) !important;
         color: #EAEAEA !important;
         font-family: 'SF Pro Display', 'Geist Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
         z-index: 999999 !important;
@@ -89,18 +89,34 @@ export const CSS_STYLES = `
 
     .rpa-toolbar {
         display: flex !important;
-        gap: 10px !important;
+        gap: 12px !important;
         align-items: center !important;
+        background: #161618 !important;
+        padding: 8px 12px !important;
+        border-radius: 6px !important;
+        border: 1px solid #242427 !important;
     }
+
+    .rpa-select-all-label {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 6px !important;
+        font-size: 12px !important;
+        color: #A1A1AA !important;
+        cursor: pointer !important;
+        user-select: none !important;
+        margin-left: auto !important;
+    }
+    .rpa-select-all-label input { cursor: pointer !important; }
 
     .rpa-btn {
         background: #1A1A1A !important;
         border: 1px solid #333333 !important;
         color: #EAEAEA !important;
         border-radius: 4px !important;
-        padding: 8px 18px !important;
+        padding: 7px 16px !important;
         font-weight: 500 !important;
-        font-size: 13px !important;
+        font-size: 12px !important;
         cursor: pointer !important;
         display: inline-flex !important;
         align-items: center !important;
@@ -132,113 +148,99 @@ export const CSS_STYLES = `
     }
     .rpa-btn-outline:hover { border-color: #444444 !important; color: #FFFFFF !important; }
 
-    .rpa-table-wrap {
+    /* ===== CARD FEED WRAPPER ===== */
+    .rpa-feed-wrap {
         flex: 1 !important;
         overflow-y: auto !important;
-        border: 1px solid #262626 !important;
-        border-radius: 6px !important;
-        background: #121212 !important;
+        padding-right: 4px !important;
     }
-    .rpa-table-wrap::-webkit-scrollbar { width: 6px !important; }
-    .rpa-table-wrap::-webkit-scrollbar-thumb { background: #262626 !important; border-radius: 3px !important; }
+    .rpa-feed-wrap::-webkit-scrollbar { width: 6px !important; }
+    .rpa-feed-wrap::-webkit-scrollbar-thumb { background: #282828 !important; border-radius: 3px !important; }
 
-    .rpa-table {
-        width: 100% !important;
-        border-collapse: collapse !important;
+    .rpa-card-feed {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 14px !important;
+    }
+
+    .rpa-empty-state {
+        text-align: center !important;
+        color: #71717A !important;
+        padding: 48px 20px !important;
+        background: #161618 !important;
+        border: 1px solid #262626 !important;
+        border-radius: 8px !important;
         font-size: 13px !important;
     }
-    .rpa-table th {
-        background: #181818 !important;
-        color: #888888 !important;
-        font-weight: 600 !important;
-        padding: 10px 12px !important;
-        position: sticky !important;
-        top: 0 !important;
-        z-index: 1 !important;
-        border-bottom: 1px solid #262626 !important;
-        font-size: 11px !important;
-        text-transform: uppercase !important;
-        letter-spacing: 0.05em !important;
-        text-align: left !important;
+
+    /* ===== DOCUMENT BENTO CARD ===== */
+    .rpa-doc-card {
+        background: #161618 !important;
+        border: 1px solid #28282B !important;
+        border-radius: 8px !important;
+        padding: 16px 18px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 12px !important;
+        transition: border-color 0.15s, background 0.15s !important;
+    }
+    .rpa-doc-card:hover {
+        border-color: #3F3F46 !important;
+        background: #18181B !important;
     }
 
-    .rpa-row-main {
-        cursor: pointer !important;
-        transition: background 0.15s !important;
+    /* Card Header */
+    .rpa-card-header {
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        gap: 10px !important;
+        padding-bottom: 10px !important;
+        border-bottom: 1px solid #242427 !important;
     }
-    .rpa-row-main:hover { background: #18181B !important; }
-    .rpa-row-main.expanded { background: #1C1C1F !important; }
-
-    .rpa-row-main td {
-        padding: 12px 12px !important;
-        border-bottom: 1px solid #222225 !important;
-        vertical-align: middle !important;
-        color: #E4E4E7 !important;
+    .rpa-card-header-left {
+        display: flex !important;
+        align-items: center !important;
+        gap: 10px !important;
+        flex-wrap: wrap !important;
+    }
+    .rpa-card-header-right {
+        display: flex !important;
+        align-items: center !important;
     }
 
     .rpa-doc-code {
         font-family: 'Geist Mono', 'SF Mono', monospace !important;
+        font-weight: 700 !important;
+        color: #FFFFFF !important;
+        font-size: 14px !important;
+        background: #242427 !important;
+        padding: 2px 8px !important;
+        border-radius: 4px !important;
+        border: 1px solid #333338 !important;
+    }
+
+    /* Tags */
+    .rpa-tag {
+        font-size: 11px !important;
+        padding: 2px 8px !important;
+        border-radius: 4px !important;
+        font-weight: 500 !important;
+        letter-spacing: 0.02em !important;
+    }
+    .rpa-tag-type {
+        background: #27272A !important;
+        color: #A1A1AA !important;
+        border: 1px solid #3F3F46 !important;
+    }
+    .rpa-tag-priority {
+        background: #FBF3DB !important;
+        color: #956400 !important;
+        border: 1px solid #F7E4A9 !important;
         font-weight: 600 !important;
-        color: #FFFFFF !important;
-        font-size: 13px !important;
-    }
-    .rpa-doc-text {
-        max-width: 320px !important;
-        overflow: hidden !important;
-        text-overflow: ellipsis !important;
-        white-space: nowrap !important;
-        color: #D4D4D8 !important;
-        line-height: 1.5 !important;
     }
 
-    .rpa-toggle-text {
-        font-family: 'Geist Mono', 'SF Mono', monospace !important;
-        font-size: 11px !important;
-        color: #71717A !important;
-    }
-
-    .rpa-row-detail {
-        background: #161618 !important;
-        border-bottom: 1px solid #262626 !important;
-    }
-    .rpa-row-detail td {
-        padding: 16px 20px !important;
-    }
-    .rpa-detail-grid {
-        display: grid !important;
-        grid-template-columns: repeat(3, 1fr) !important;
-        gap: 14px 24px !important;
-        background: #111113 !important;
-        padding: 16px !important;
-        border-radius: 6px !important;
-        border: 1px solid #242427 !important;
-    }
-    .rpa-detail-field {
-        display: flex !important;
-        flex-direction: column !important;
-        gap: 4px !important;
-    }
-    .rpa-detail-field.span-2 { grid-column: span 2 !important; }
-    .rpa-detail-field.span-full { grid-column: span 3 !important; }
-
-    .rpa-detail-label {
-        font-size: 11px !important;
-        text-transform: uppercase !important;
-        letter-spacing: 0.05em !important;
-        color: #71717A !important;
-        font-weight: 500 !important;
-    }
-    .rpa-detail-value {
-        font-size: 13px !important;
-        color: #E4E4E7 !important;
-        line-height: 1.5 !important;
-        word-break: break-word !important;
-    }
-    .rpa-detail-value.highlight {
-        color: #FFFFFF !important;
-        font-weight: 500 !important;
-    }
-
+    /* Status Badges */
     .rpa-badge {
         display: inline-flex !important;
         align-items: center !important;
@@ -250,11 +252,136 @@ export const CSS_STYLES = `
         text-transform: uppercase !important;
     }
     .rpa-badge-idle { background: #27272A !important; color: #A1A1AA !important; }
-    .rpa-badge-pending { background: #2E2211 !important; color: #F59E0B !important; }
-    .rpa-badge-success { background: #14291B !important; color: #4ADE80 !important; }
-    .rpa-badge-error { background: #2D1517 !important; color: #F87171 !important; }
-    .rpa-badge-sent { background: #102030 !important; color: #60A5FA !important; }
+    .rpa-badge-pending { background: #E1F3FE !important; color: #1F6C9F !important; }
+    .rpa-badge-success { background: #EDF3EC !important; color: #346538 !important; }
+    .rpa-badge-error { background: #FDEBEC !important; color: #9F2F2D !important; }
+    .rpa-badge-sent { background: #E1F3FE !important; color: #1F6C9F !important; }
 
+    /* Card Body */
+    .rpa-card-body {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 12px !important;
+    }
+
+    .rpa-card-subject {
+        font-size: 14px !important;
+        font-weight: 600 !important;
+        color: #F4F4F5 !important;
+        line-height: 1.5 !important;
+    }
+    .rpa-subject-label {
+        color: #71717A !important;
+        font-weight: 500 !important;
+        font-size: 12px !important;
+        text-transform: uppercase !important;
+        margin-right: 4px !important;
+    }
+
+    /* AI Summary Callout */
+    .rpa-card-summary {
+        background: #111113 !important;
+        border: 1px solid #242427 !important;
+        border-left: 3px solid #EAEAEA !important;
+        border-radius: 6px !important;
+        padding: 12px 14px !important;
+    }
+    .rpa-summary-title {
+        font-size: 10px !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.08em !important;
+        color: #A1A1AA !important;
+        font-weight: 600 !important;
+        margin-bottom: 4px !important;
+        font-family: 'Geist Mono', 'SF Mono', monospace !important;
+    }
+    .rpa-summary-text {
+        font-size: 13px !important;
+        color: #E4E4E7 !important;
+        line-height: 1.6 !important;
+        white-space: pre-wrap !important;
+    }
+
+    /* Meta Grid */
+    .rpa-card-meta-grid {
+        display: grid !important;
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: 12px !important;
+        background: #131315 !important;
+        border: 1px solid #222225 !important;
+        padding: 12px 14px !important;
+        border-radius: 6px !important;
+    }
+
+    .rpa-meta-item {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 4px !important;
+    }
+    .rpa-meta-label {
+        font-size: 10px !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.05em !important;
+        color: #71717A !important;
+        font-weight: 600 !important;
+    }
+    .rpa-meta-value {
+        font-size: 13px !important;
+        color: #D4D4D8 !important;
+    }
+    .rpa-meta-value.main-unit {
+        color: #FFFFFF !important;
+        font-weight: 600 !important;
+    }
+    .rpa-meta-value.deadline {
+        font-family: 'Geist Mono', 'SF Mono', monospace !important;
+        color: #FFFFFF !important;
+        font-weight: 500 !important;
+    }
+
+    .rpa-unit-tags {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        gap: 4px !important;
+    }
+    .rpa-unit-pill {
+        background: #242427 !important;
+        border: 1px solid #333338 !important;
+        color: #D4D4D8 !important;
+        padding: 1px 8px !important;
+        border-radius: 4px !important;
+        font-size: 11px !important;
+    }
+
+    /* Card Footer Meta */
+    .rpa-card-footer-meta {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        gap: 16px !important;
+        font-size: 11px !important;
+        color: #888888 !important;
+        padding-top: 4px !important;
+    }
+    .rpa-card-footer-meta strong {
+        color: #A1A1AA !important;
+    }
+
+    /* ===== LOG PANEL ===== */
+    .rpa-log-panel {
+        display: none !important;
+        height: 120px !important;
+        background: #0A0A0A !important;
+        border: 1px solid #222222 !important;
+        border-radius: 4px !important;
+        padding: 8px !important;
+        font-family: 'Geist Mono', 'SF Mono', monospace !important;
+        font-size: 11px !important;
+        overflow-y: auto !important;
+        color: #00FF66 !important;
+    }
+    .rpa-log-panel.open { display: block !important; }
+
+    /* ===== FOOTER ===== */
     .rpa-footer {
         display: flex !important;
         justify-content: space-between !important;
@@ -262,53 +389,26 @@ export const CSS_STYLES = `
         padding: 8px 16px !important;
         background: #181818 !important;
         border-top: 1px solid #262626 !important;
-        gap: 16px !important;
+        font-size: 11px !important;
+        color: #888888 !important;
     }
-    .rpa-status-text {
-        font-size: 12px !important;
-        color: #A1A1AA !important;
-        flex: 1 !important;
-        overflow: hidden !important;
-        text-overflow: ellipsis !important;
-        white-space: nowrap !important;
+
+    .rpa-progress-wrap {
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
     }
-    .rpa-progress-wrap { display: flex !important; align-items: center !important; gap: 10px !important; }
     .rpa-progress-bar {
-        width: 120px !important;
-        height: 4px !important;
+        width: 100px !important;
+        height: 6px !important;
         background: #262626 !important;
-        border-radius: 2px !important;
+        border-radius: 3px !important;
         overflow: hidden !important;
     }
     .rpa-progress-fill {
-        height: 100% !important;
-        background: #EAEAEA !important;
         width: 0% !important;
-        transition: width 0.2s !important;
+        height: 100% !important;
+        background: #FFFFFF !important;
+        transition: width 0.2s ease !important;
     }
-    .rpa-progress-text {
-        font-size: 11px !important;
-        color: #A1A1AA !important;
-        font-family: 'Geist Mono', 'SF Mono', monospace !important;
-    }
-
-    .rpa-log-panel {
-        max-height: 0 !important;
-        overflow-y: auto !important;
-        transition: max-height 0.25s !important;
-        background: #0D0D0D !important;
-        border-radius: 4px !important;
-    }
-    .rpa-log-panel.open {
-        max-height: 120px !important;
-        padding: 8px 12px !important;
-        border: 1px solid #262626 !important;
-    }
-    .rpa-log-entry {
-        font-size: 11px !important;
-        color: #888888 !important;
-        font-family: 'Geist Mono', 'SF Mono', monospace !important;
-        line-height: 1.6 !important;
-    }
-    .rpa-log-time { color: #555555 !important; margin-right: 8px !important; }
 `;
