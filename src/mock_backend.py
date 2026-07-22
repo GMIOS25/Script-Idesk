@@ -1,12 +1,21 @@
 """
-Mock Backend cho iDesk RPA Automation v2.3
-Mô phỏng AI xử lý văn bản đến và trả về các trường:
-- Trường gửi lên: Số hiệu VB, Loại VB, CQ BH, Ngày VB, Người ký, Trích yếu + file PDF
-- Trường AI trả về: Sổ văn bản đến, Xử lý chính, Phối hợp (array), Hạn xử lý, Tóm tắt, Ghi chú
+Mock Backend cho iDesk RPA Automation (DocFlow API v3.1)
+Mô phỏng AI xử lý văn bản đến theo tài liệu docs/en/docflow.md
+
+Endpoints hỗ trợ:
+- POST /auth/token              : Lấy access token
+- POST /documents/process       : Tra cache hoặc xử lý văn bản (Endpoint chính)
+- POST /api/v1/documents/process: Alias cho /documents/process
+- POST /api/process-doc         : Legacy endpoint (backward compatibility)
+- POST /documents/lookup        : Tra metadata văn bản
+- PATCH /documents/<stt>        : Cập nhật 6 trường thông tin AI
+- GET  /health                  : Check Liveness
+- GET  /health/ready            : Check Readiness
 """
 
 import os
 import json
+import uuid
 from datetime import datetime
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -14,206 +23,337 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)
 
-# DỮ LIỆU MẪU - Mô phỏng dữ liệu từ resource/qsreceiving.cpx & dropdown_so_van_ban_den.html
+# DỮ LIỆU MẪU - Đáp ứng đúng schema trong docflow.md
 SAMPLE_RESPONSES = [
     {
         "sign_number_match": "5637/SYT-TCCB",
-        "response": {
-            "so_van_ban": "Số văn bản đến UBND tỉnh",
-            "tom_tat": "Trình tự, thủ tục, biểu mẫu thực hiện chính sách thu hút và ưu đãi bác sĩ, dược sĩ theo NQ 54/2026/NQ-HĐND",
-            "don_vi_xu_ly": "Trạm y tế Phù Mỹ Tây",
-            "lanh_dao_theo_doi": "Chủ tịch UBND xã",
-            "thoi_han_thuc_hien": 7,
-            "don_vi_phoi_hop": ["Phòng VH XH", "Văn phòng xã"],
-            "ghi_chu": "Văn bản ưu đãi ngành Y tế - Ưu tiên xử lý"
+        "data": {
+            "stt": 1,
+            "document_number": "5637/SYT-TCCB",
+            "document_type": "Thông báo",
+            "issuing_agency": "Sở Y tế",
+            "document_date": "2026-07-20",
+            "signer": "Nguyễn Văn A",
+            "subject": "Trình tự, thủ tục, biểu mẫu thực hiện chính sách thu hút và ưu đãi bác sĩ, dược sĩ theo NQ 54/2026/NQ-HĐND",
+            "summary": "Trình tự, thủ tục, biểu mẫu thực hiện chính sách thu hút và ưu đãi bác sĩ, dược sĩ theo NQ 54/2026/NQ-HĐND",
+            "processing_unit": "Trạm y tế Phù Mỹ Tây",
+            "monitoring_leader": "Chủ tịch UBND xã",
+            "implementation_deadline": 7,
+            "coordinating_units": ["Phòng VH XH", "Văn phòng xã"],
+            "notes": "Văn bản ưu đãi ngành Y tế - Ưu tiên xử lý",
+            "priority": 1  # 0: Bình thường, 1: Khẩn, 2: Thượng khẩn
         }
     },
     {
         "sign_number_match": "8069/SNNMT-PTNT",
-        "response": {
-            "so_van_ban": "Văn bản do cấp trên gửi đến",
-            "tom_tat": "Phối hợp cung cấp số liệu về tỷ lệ nghèo đa chiều phục vụ xác định thôn vùng đồng bào DTTS",
-            "don_vi_xu_ly": "Phòng KT-HT",
-            "lanh_dao_theo_doi": "Phó chủ tịch phụ trách kinh tế",
-            "thoi_han_thuc_hien": 5,
-            "don_vi_phoi_hop": ["Phòng VH XH", "Trung tâm HCC"],
-            "ghi_chu": "Yêu cầu số liệu trước ngày 25"
+        "data": {
+            "stt": 2,
+            "document_number": "8069/SNNMT-PTNT",
+            "document_type": "Công văn",
+            "issuing_agency": "Sở Nông nghiệp và PTNT",
+            "document_date": "2026-07-19",
+            "signer": "Trần Văn B",
+            "subject": "Phối hợp cung cấp số liệu về tỷ lệ nghèo đa chiều phục vụ xác định thôn vùng đồng bào DTTS",
+            "summary": "Phối hợp cung cấp số liệu về tỷ lệ nghèo đa chiều phục vụ xác định thôn vùng đồng bào DTTS",
+            "processing_unit": "Phòng KT-HT",
+            "monitoring_leader": "Phó chủ tịch phụ trách kinh tế",
+            "implementation_deadline": 5,
+            "coordinating_units": ["Phòng VH XH", "Trung tâm HCC"],
+            "notes": "Yêu cầu số liệu trước ngày 25",
+            "priority": 0
         }
     },
     {
         "sign_number_match": "445/TB-UBND",
-        "response": {
-            "so_van_ban": "Văn bản do địa phương gửi đến",
-            "tom_tat": "Niêm yết công khai xác nhận nguồn gốc đất, thời điểm sử dụng đất và cấp GCN QSD đất lần đầu",
-            "don_vi_xu_ly": "Văn phòng xã",
-            "lanh_dao_theo_doi": "Chủ tịch UBND xã",
-            "thoi_han_thuc_hien": 15,
-            "don_vi_phoi_hop": ["Công an xã", "Phòng KT-HT"],
-            "ghi_chu": "Niêm yết 15 ngày tại trụ sở"
+        "data": {
+            "stt": 3,
+            "document_number": "445/TB-UBND",
+            "document_type": "Thông báo",
+            "issuing_agency": "UBND Huyện Phù Mỹ",
+            "document_date": "2026-07-18",
+            "signer": "Lê Văn C",
+            "subject": "Niêm yết công khai xác nhận nguồn gốc đất, thời điểm sử dụng đất và cấp GCN QSD đất lần đầu",
+            "summary": "Niêm yết công khai xác nhận nguồn gốc đất, thời điểm sử dụng đất và cấp GCN QSD đất lần đầu",
+            "processing_unit": "Văn phòng xã",
+            "monitoring_leader": "Chủ tịch UBND xã",
+            "implementation_deadline": 15,
+            "coordinating_units": ["Công an xã", "Phòng KT-HT"],
+            "notes": "Niêm yết 15 ngày tại trụ sở",
+            "priority": 0
         }
     },
     {
         "sign_number_match": "274a/TB-UBND",
-        "response": {
-            "so_van_ban": "Sổ văn bản đến",
-            "tom_tat": "Niêm yết công khai kết quả kiểm tra hồ sơ đăng ký của ông Nguyễn Văn Cang",
-            "don_vi_xu_ly": "Văn phòng xã",
-            "lanh_dao_theo_doi": "Chủ tịch UBND xã",
-            "thoi_han_thuc_hien": 10,
-            "don_vi_phoi_hop": ["Công an xã"],
-            "ghi_chu": "Hồ sơ đất đai cá nhân"
+        "data": {
+            "stt": 4,
+            "document_number": "274a/TB-UBND",
+            "document_type": "Thông báo",
+            "issuing_agency": "UBND xã",
+            "document_date": "2026-07-17",
+            "signer": "Phạm Văn D",
+            "subject": "Niêm yết công khai kết quả kiểm tra hồ sơ đăng ký của ông Nguyễn Văn Cang",
+            "summary": "Niêm yết công khai kết quả kiểm tra hồ sơ đăng ký của ông Nguyễn Văn Cang",
+            "processing_unit": "Văn phòng xã",
+            "monitoring_leader": "Chủ tịch UBND xã",
+            "implementation_deadline": 10,
+            "coordinating_units": ["Công an xã"],
+            "notes": "Hồ sơ đất đai cá nhân",
+            "priority": 0
         }
     },
     {
         "sign_number_match": "5174/SNV-CCVC",
-        "response": {
-            "so_van_ban": "Sổ văn bản đến Hội đồng nhân dân",
-            "tom_tat": "Góp ý dự thảo Thông tư hướng dẫn xây dựng, khai thác học liệu số trong bồi dưỡng cán bộ",
-            "don_vi_xu_ly": "Văn phòng HĐND xã",
-            "lanh_dao_theo_doi": "Chủ tịch HĐND xã",
-            "thoi_han_thuc_hien": 7,
-            "don_vi_phoi_hop": ["Phòng VH XH", "Đoàn TNCS"],
-            "ghi_chu": "Gửi văn bản góp ý về Sở Nội vụ"
+        "data": {
+            "stt": 5,
+            "document_number": "5174/SNV-CCVC",
+            "document_type": "Công văn",
+            "issuing_agency": "Sở Nội vụ",
+            "document_date": "2026-07-16",
+            "signer": "Hoàng Văn E",
+            "subject": "Góp ý dự thảo Thông tư hướng dẫn xây dựng, khai thác học liệu số trong bồi dưỡng cán bộ",
+            "summary": "Góp ý dự thảo Thông tư hướng dẫn xây dựng, khai thác học liệu số trong bồi dưỡng cán bộ",
+            "processing_unit": "Văn phòng HĐND xã",
+            "monitoring_leader": "Chủ tịch HĐND xã",
+            "implementation_deadline": 7,
+            "coordinating_units": ["Phòng VH XH", "Đoàn TNCS"],
+            "notes": "Gửi văn bản góp ý về Sở Nội vụ",
+            "priority": 0
         }
     },
     {
         "sign_number_match": "3059/QĐ-UBND",
-        "response": {
-            "so_van_ban": "Văn bản do cấp trên gửi đến",
-            "tom_tat": "Phê duyệt danh sách tổ chức, cá nhân tham gia mạng lưới tư vấn viên pháp luật tỉnh Gia Lai",
-            "don_vi_xu_ly": "Văn phòng xã",
-            "lanh_dao_theo_doi": "Chủ tịch UBND xã",
-            "thoi_han_thuc_hien": 5,
-            "don_vi_phoi_hop": ["Công an xã"],
-            "ghi_chu": "Cập nhật danh sách tư vấn viên"
+        "data": {
+            "stt": 6,
+            "document_number": "3059/QĐ-UBND",
+            "document_type": "Quyết định",
+            "issuing_agency": "UBND Tỉnh",
+            "document_date": "2026-07-15",
+            "signer": "Vũ Văn F",
+            "subject": "Phê duyệt danh sách tổ chức, cá nhân tham gia mạng lưới tư vấn viên pháp luật tỉnh Gia Lai",
+            "summary": "Phê duyệt danh sách tổ chức, cá nhân tham gia mạng lưới tư vấn viên pháp luật tỉnh Gia Lai",
+            "processing_unit": "Văn phòng xã",
+            "monitoring_leader": "Chủ tịch UBND xã",
+            "implementation_deadline": 5,
+            "coordinating_units": ["Công an xã"],
+            "notes": "Cập nhật danh sách tư vấn viên",
+            "priority": 0
         }
     },
     {
         "sign_number_match": "5636/SYT-NVY",
-        "response": {
-            "so_van_ban": "Số văn bản đến UBND tỉnh",
-            "tom_tat": "Triển khai Kế hoạch số 261/KH-UBND ngày 26/6/2026 về thực hiện BHYT toàn dân giai đoạn mới",
-            "don_vi_xu_ly": "Trạm y tế Phù Mỹ Tây",
-            "lanh_dao_theo_doi": "Phó chủ tịch phụ trách kinh tế",
-            "thoi_han_thuc_hien": 10,
-            "don_vi_phoi_hop": ["Phòng VH XH"],
-            "ghi_chu": "Tuyên truyền BHYT toàn dân"
+        "data": {
+            "stt": 7,
+            "document_number": "5636/SYT-NVY",
+            "document_type": "Kế hoạch",
+            "issuing_agency": "Sở Y tế",
+            "document_date": "2026-07-14",
+            "signer": "Đặng Văn G",
+            "subject": "Triển khai Kế hoạch số 261/KH-UBND ngày 26/6/2026 về thực hiện BHYT toàn dân giai đoạn mới",
+            "summary": "Triển khai Kế hoạch số 261/KH-UBND ngày 26/6/2026 về thực hiện BHYT toàn dân giai đoạn mới",
+            "processing_unit": "Trạm y tế Phù Mỹ Tây",
+            "monitoring_leader": "Phó chủ tịch phụ phụ trách kinh tế",
+            "implementation_deadline": 10,
+            "coordinating_units": ["Phòng VH XH"],
+            "notes": "Tuyên truyền BHYT toàn dân",
+            "priority": 0
         }
     },
     {
         "sign_number_match": "8497/CAT-PV01",
-        "response": {
-            "so_van_ban": "Văn bản khẩn, hỏa tốc",
-            "tom_tat": "Thông báo tiếp nhận văn bản hệ thống quản lý văn bản trên môi trường điện tử",
-            "don_vi_xu_ly": "Công an xã",
-            "lanh_dao_theo_doi": "Chủ tịch UBND xã",
-            "thoi_han_thuc_hien": 3,
-            "don_vi_phoi_hop": ["Văn phòng xã"],
-            "ghi_chu": "Văn bản khẩn điện tử"
-        }
-    },
-    {
-        "sign_number_match": "1024/TB-SXD",
-        "response": {
-            "so_van_ban": "Sổ văn bản đến Trung ương",
-            "tom_tat": "Sở xây dựng thông báo kế hoạch kiểm tra về cấp phép xây dựng",
-            "don_vi_xu_ly": "Phòng KT-HT",
-            "lanh_dao_theo_doi": "Phó chủ tịch phụ trách kinh tế",
-            "thoi_han_thuc_hien": 5,
-            "don_vi_phoi_hop": ["Phòng VH XH", "Trung tâm HCC"],
-            "ghi_chu": "Chuẩn bị hồ sơ kiểm tra"
-        }
-    },
-    {
-        "sign_number_match": "18/NQ-HĐND",
-        "response": {
-            "so_van_ban": "Sổ văn bản đến Hội đồng nhân dân",
-            "tom_tat": "Nghị quyết về phát triển kinh tế xã hội xã Phù Mỹ Tây",
-            "don_vi_xu_ly": "Văn phòng HĐND xã",
-            "lanh_dao_theo_doi": "Chủ tịch HĐND xã",
-            "thoi_han_thuc_hien": 7,
-            "don_vi_phoi_hop": ["Công an xã", "Phòng Kinh tế", "Phòng VH XH"],
-            "ghi_chu": "Nghị quyết quan trọng"
+        "data": {
+            "stt": 8,
+            "document_number": "8497/CAT-PV01",
+            "document_type": "Công văn",
+            "issuing_agency": "Công an tỉnh",
+            "document_date": "2026-07-13",
+            "signer": "Bùi Văn H",
+            "subject": "Thông báo tiếp nhận văn bản hệ thống quản lý văn bản trên môi trường điện tử",
+            "summary": "Thông báo tiếp nhận văn bản hệ thống quản lý văn bản trên môi trường điện tử",
+            "processing_unit": "Công an xã",
+            "monitoring_leader": "Chủ tịch UBND xã",
+            "implementation_deadline": 3,
+            "coordinating_units": ["Văn phòng xã"],
+            "notes": "Văn bản khẩn điện tử",
+            "priority": 2  # Thượng khẩn
         }
     }
 ]
 
-DEFAULT_RESPONSE = {
-    "so_van_ban": "Số văn bản đến UBND tỉnh",
-    "tom_tat": "Tự động phân tích văn bản đến",
-    "don_vi_xu_ly": "Phòng KT-HT",
-    "lanh_dao_theo_doi": "Chủ tịch UBND xã",
-    "thoi_han_thuc_hien": 5,
-    "don_vi_phoi_hop": ["Văn phòng xã"],
-    "ghi_chu": "Phân tích mặc định"
+DEFAULT_DOC_DATA = {
+    "stt": 99,
+    "document_number": "999/VB-KXD",
+    "document_type": "Công văn",
+    "issuing_agency": "Cơ quan ban hành",
+    "document_date": "2026-07-21",
+    "signer": "Người ký",
+    "subject": "Tự động phân tích văn bản đến",
+    "summary": "Tự động phân tích văn bản đến từ hệ thống iDesk",
+    "processing_unit": "Phòng KT-HT",
+    "monitoring_leader": "Chủ tịch UBND xã",
+    "implementation_deadline": 5,
+    "coordinating_units": ["Văn phòng xã"],
+    "notes": "Phân tích mặc định từ AI Mock Backend",
+    "priority": 0
 }
 
+# ----------------------------------------------------
+# 1. POST /auth/token
+# ----------------------------------------------------
+@app.route('/auth/token', methods=['POST'])
+def auth_token():
+    payload = request.get_json(silent=True) or {}
+    username = payload.get('username', '')
+    password = payload.get('password', '')
+
+    print(f"[AUTH] Request token for user: '{username}'")
+
+    token = f"mock_bearer_token_{uuid.uuid4().hex[:16]}"
+    return jsonify({
+        "access_token": token,
+        "token_type": "bearer",
+        "expires_in": 86400
+    }), 200
+
+# ----------------------------------------------------
+# 2. POST /documents/process (và các Route Aliases)
+# ----------------------------------------------------
+@app.route('/documents/process', methods=['POST'])
+@app.route('/api/v1/documents/process', methods=['POST'])
 @app.route('/api/process-doc', methods=['POST'])
-def process_doc():
+def process_document():
     print("=" * 60)
-    print("RECEIVED REQUEST FROM IDESK AUTOMATION")
+    print("RECEIVED PROCESS REQUEST FOR DOCFLOW API (v3.1)")
     print("=" * 60)
 
-    # 1. Read metadata
-    metadata_str = request.form.get('metadata', '{}')
-    try:
-        metadata = json.loads(metadata_str)
-        print("\nScraped Metadata:")
-        print(json.dumps(metadata, indent=2, ensure_ascii=False))
-    except Exception as e:
-        print(f"Error parsing metadata: {e}")
-        metadata = {}
+    request_data = request.get_json(silent=True)
+    metadata = {}
+    file_url = ""
 
-    # 2. Save PDF file locally for inspection
-    pdf_file = request.files.get('pdf')
-    if pdf_file:
-        pdf_dir = os.path.join(os.getcwd(), 'received_pdfs')
-        os.makedirs(pdf_dir, exist_ok=True)
-        filename = pdf_file.filename
-        save_path = os.path.join(pdf_dir, filename)
-        pdf_file.save(save_path)
-        print(f"\nSaved PDF to: {save_path} ({os.path.getsize(save_path)} bytes)")
+    if request_data and isinstance(request_data, dict):
+        metadata = request_data.get('metadata', {})
+        file_url = request_data.get('file_url', '')
     else:
-        print("\nNo PDF file received.")
+        # Support fallback FormData if client sends legacy format
+        metadata_str = request.form.get('metadata', '{}')
+        try:
+            metadata = json.loads(metadata_str)
+        except Exception:
+            metadata = {}
 
-    # 3. Match với dữ liệu mẫu
-    sign_number = metadata.get('so_hieu', '')
-    subject = metadata.get('trich_yeu', '')
+        pdf_file = request.files.get('pdf')
+        if pdf_file:
+            pdf_dir = os.path.join(os.getcwd(), 'received_pdfs')
+            os.makedirs(pdf_dir, exist_ok=True)
+            save_path = os.path.join(pdf_dir, pdf_file.filename)
+            pdf_file.save(save_path)
+            file_url = f"file://{save_path}"
 
-    response_data = None
+    print("\nMetadata Received:")
+    print(json.dumps(metadata, indent=2, ensure_ascii=False))
+
+    doc_number = metadata.get('document_number') or metadata.get('so_hieu') or ''
+    subject = metadata.get('subject') or metadata.get('trich_yeu') or ''
+
+    matched_data = None
     for sample in SAMPLE_RESPONSES:
-        if sample["sign_number_match"] in sign_number or sample["sign_number_match"] in subject:
-            response_data = sample["response"].copy()
-            print(f"\nMatched with sample: {sample['sign_number_match']}")
+        pattern = sample["sign_number_match"]
+        if pattern in doc_number or pattern in subject:
+            matched_data = sample["data"].copy()
+            print(f"\nMatched sample for pattern: {pattern}")
             break
 
-    if not response_data:
-        response_data = DEFAULT_RESPONSE.copy()
-        response_data["tom_tat"] = subject[:100] if subject else "Cho xu ly"
-        print("\nNo exact match, using fallback default response")
+    if not matched_data:
+        matched_data = DEFAULT_DOC_DATA.copy()
+        matched_data["document_number"] = doc_number or "999/VB-KXD"
+        matched_data["subject"] = subject or "Văn bản chưa khớp mẫu"
+        matched_data["summary"] = f"Tóm tắt tự động cho: {subject}" if subject else "Chờ xử lý"
+        print("\nNo exact pattern match, using default mock response")
 
-    response_data["processed_at"] = datetime.now().isoformat()
-    response_data["thoi_han_thuc_hien"] = int(response_data["thoi_han_thuc_hien"])
+    # Update dynamic fields
+    matched_data["document_number"] = doc_number or matched_data["document_number"]
+    matched_data["document_type"] = metadata.get('document_type') or metadata.get('loai_vb') or matched_data["document_type"]
+    matched_data["issuing_agency"] = metadata.get('issuing_agency') or metadata.get('cq_bh') or matched_data["issuing_agency"]
+    matched_data["document_date"] = metadata.get('document_date') or metadata.get('ngay_vb') or matched_data["document_date"]
+    matched_data["signer"] = metadata.get('signer') or metadata.get('nguoi_ky') or matched_data["signer"]
+    matched_data["subject"] = subject or matched_data["subject"]
 
-    print("\nAI Response Payload:")
-    print(json.dumps(response_data, indent=2, ensure_ascii=False))
+    response_payload = {
+        "source": "processed",
+        "data": matched_data
+    }
+
+    print("\nResponse Payload:")
+    print(json.dumps(response_payload, indent=2, ensure_ascii=False))
     print("=" * 60)
 
-    return jsonify(response_data)
+    return jsonify(response_payload), 200
 
-@app.route('/api/health', methods=['GET'])
+# ----------------------------------------------------
+# 3. POST /documents/lookup
+# ----------------------------------------------------
+@app.route('/documents/lookup', methods=['POST'])
+def lookup_document():
+    req_body = request.get_json(silent=True) or {}
+    doc_number = req_body.get('document_number', '')
+
+    for sample in SAMPLE_RESPONSES:
+        if sample["sign_number_match"] in doc_number:
+            return jsonify({
+                "found": True,
+                "state": "completed",
+                "data": sample["data"]
+            }), 200
+
+    return jsonify({
+        "found": False,
+        "state": "not_found",
+        "data": None
+    }), 200
+
+# ----------------------------------------------------
+# 4. PATCH /documents/<stt>
+# ----------------------------------------------------
+@app.route('/documents/<int:stt>', methods=['PATCH'])
+def patch_document(stt):
+    patch_body = request.get_json(silent=True) or {}
+    matched = DEFAULT_DOC_DATA.copy()
+    matched["stt"] = stt
+
+    for key, val in patch_body.items():
+        if key in matched:
+            matched[key] = val
+
+    return jsonify({"data": matched}), 200
+
+# ----------------------------------------------------
+# 5. GET /health & GET /health/ready
+# ----------------------------------------------------
+@app.route('/health', methods=['GET'])
 def health():
     return jsonify({
         "status": "ok",
-        "service": "iDesk AI Mock Backend",
-        "version": "2.3"
-    })
+        "service": "DocFlow AI Mock Backend",
+        "version": "3.1"
+    }), 200
+
+@app.route('/health/ready', methods=['GET'])
+def health_ready():
+    return jsonify({
+        "status": "ready",
+        "checks": {
+            "database": "ok",
+            "prompt": "ok",
+            "ai_provider": "ok",
+            "ocr_dependencies": "ok"
+        }
+    }), 200
 
 if __name__ == '__main__':
     print("""
-╔══════════════════════════════════════════════════╗
-║     iDesk AI Mock Backend v2.3                  ║
-║     Running on http://localhost:5000             ║
-╚══════════════════════════════════════════════════╝
+╔══════════════════════════════════════════════════════╗
+║     DocFlow AI Mock Backend v3.1 (Flask)            ║
+║     Running on http://localhost:5000                 ║
+║     Endpoint: POST /documents/process                ║
+╚══════════════════════════════════════════════════════╝
     """)
     app.run(host='0.0.0.0', port=5000, debug=True)

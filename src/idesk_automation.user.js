@@ -28,7 +28,8 @@
     // callAIBackend() ben duoi CHUA doi theo hop dong moi, giu nguyen de tuong thich voi
     // mock_backend.py hien co. Neu backend duoc nang cap len v2.2, can sua lai rieng.
     const CONFIG = {
-        BACKEND_URL: 'http://localhost:5000/api/process-doc',
+        BACKEND_URL: 'http://localhost:5000/documents/process',
+        AUTH_URL: 'http://localhost:5000/auth/token',
         DELAY_MS: {
             SELECT_DOC: 1000,
             CLICK_SAVE_TRANSFER: 1200,
@@ -383,40 +384,77 @@
         return doc;
     };
 
+    let cachedAuthToken = '';
+
+    const getAuthToken = () => {
+        return new Promise((resolve) => {
+            if (cachedAuthToken) return resolve(cachedAuthToken);
+            GM_xmlhttpRequest({
+                method: 'POST',
+                url: CONFIG.AUTH_URL,
+                headers: { 'Content-Type': 'application/json' },
+                data: JSON.stringify({ username: 'fe-server-prod', password: 'secret_password' }),
+                onload: (resp) => {
+                    if (resp.status === 200) {
+                        try {
+                            const res = JSON.parse(resp.responseText);
+                            cachedAuthToken = res.access_token || '';
+                            appendLog('Da lay Auth Token tu Backend');
+                        } catch (e) {}
+                    }
+                    resolve(cachedAuthToken);
+                },
+                onerror: () => resolve(''),
+                ontimeout: () => resolve('')
+            });
+        });
+    };
+
     const callAIBackend = async (doc) => {
         const targetAttach = selectAttachment(doc);
         if (!targetAttach) {
             throw new Error(`Khong tim thay file dinh kem phu hop cho VB "${doc.signNumber}"`);
         }
 
-        const pdfFile = await downloadPDF(targetAttach.contentUid, targetAttach.name);
-        const metadata = {
-            id: doc.id,
-            so_hieu: doc.signNumber || '',
-            loai_vb: doc.category || '',
-            cq_bh: doc.author || '',
-            ngay_vb: doc.docDateStr || '',
-            nguoi_ky: doc.signer || '',
-            trich_yeu: doc.subject || ''
+        const bp = basePath || getFallbackBasePath();
+        const fileUrl = window.location.origin + `${bp}/docx/download.cpx?docID=${targetAttach.contentUid}&view=pdf`;
+        const token = await getAuthToken();
+
+        const payload = {
+            metadata: {
+                document_number: doc.signNumber || '',
+                document_type: doc.category || '',
+                issuing_agency: doc.author || '',
+                document_date: doc.docDateStr || '',
+                signer: doc.signer || '',
+                subject: doc.subject || ''
+            },
+            file_url: fileUrl
         };
 
-        const formData = new FormData();
-        formData.append('pdf', pdfFile);
-        formData.append('metadata', JSON.stringify(metadata));
-
         return new Promise((resolve, reject) => {
-            setStatus(`Gui "${doc.signNumber}" den AI...`);
+            setStatus(`Gui "${doc.signNumber}" den AI (DocFlow API)...`);
+
+            const headers = {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            };
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
 
             GM_xmlhttpRequest({
                 method: 'POST',
                 url: CONFIG.BACKEND_URL,
-                data: formData,
+                headers: headers,
+                data: JSON.stringify(payload),
                 onload: (resp) => {
                     if (resp.status === 200) {
                         try {
                             const result = JSON.parse(resp.responseText);
-                            appendLog(`AI phan hoi cho "${doc.signNumber}": ${JSON.stringify(result)}`);
-                            resolve(result);
+                            const responseData = result.data || result;
+                            appendLog(`AI phan hoi cho "${doc.signNumber}": ${JSON.stringify(responseData)}`);
+                            resolve(responseData);
                         } catch (e) {
                             reject(new Error(`Parse JSON loi: ${e.message}`));
                         }
@@ -581,12 +619,31 @@
             }
         }
 
-        // Ghi chu: panel "Chuyen xu ly" cua role Chu tich con co them 2 truong "Do khan"
-        // (S.PRIORITY_SELECT) va "Noi dung" (S.CONTENT_TEXTAREA) ma ban Van thu khong co -
-        // hien CHUA tu dong dien 2 truong nay de giu dung pham vi "cung chuc nang nhu Van thu
-        // da lam". Neu muon tu dong dien them (vd Noi dung = aiData.ghi_chu/notes), chi can bao
-        // de bo sung, cau truc san sang (S.CONTENT_TEXTAREA la <textarea>, S.PRIORITY_SELECT la
-        // <select> voi value 0=Binh thuong/1=Khan/2=Thuong khan).
+        // Tự động điền 1: Độ khẩn (#ed-transfer-select-priority)
+        const prioritySelect = document.querySelector(S.PRIORITY_SELECT);
+        if (prioritySelect) {
+            let pVal = '0';
+            const pRaw = (aiData.priority !== undefined && aiData.priority !== null) ? aiData.priority : aiData.do_khan;
+            if (pRaw !== undefined && pRaw !== null) {
+                if (pRaw === 1 || pRaw === '1' || pRaw === 'Khẩn' || pRaw === 'khan') pVal = '1';
+                else if (pRaw === 2 || pRaw === '2' || pRaw === 'Thượng khẩn' || pRaw === 'thuong_khan' || pRaw === 'Hỏa tốc') pVal = '2';
+                else pVal = String(pRaw);
+            }
+            prioritySelect.value = pVal;
+            prioritySelect.dispatchEvent(new Event('change', { bubbles: true }));
+            const pText = prioritySelect.options[prioritySelect.selectedIndex]?.text || pVal;
+            appendLog(`Do khan: ${pText}`);
+        }
+
+        // Tự động điền 2: Nội dung (#ed-transfer-txt-content)
+        const contentTextarea = document.querySelector(S.CONTENT_TEXTAREA);
+        if (contentTextarea) {
+            const contentVal = aiData.notes || aiData.ghi_chu || aiData.content || aiData.summary || aiData.tom_tat || '';
+            contentTextarea.value = contentVal;
+            contentTextarea.dispatchEvent(new Event('input', { bubbles: true }));
+            contentTextarea.dispatchEvent(new Event('change', { bubbles: true }));
+            appendLog(`Noi dung: ${contentVal.substring(0, 45)}${contentVal.length > 45 ? '...' : ''}`);
+        }
 
         const agreeBtn = document.querySelector(S.AGREE_BTN) || findByVisibleText(container, 'button, a', ['Đồng ý', 'Dong y']);
         if (!agreeBtn) throw new Error('Khong tim thay nut "Dong y"!');
@@ -1121,6 +1178,11 @@
             const coUnitsStr = (Array.isArray(coUnits) && coUnits.length > 0) ? coUnits.join(', ') : '---';
             const notes = ai.ghi_chu || ai.notes || '---';
 
+            const pRaw = (ai.priority !== undefined && ai.priority !== null) ? ai.priority : ai.do_khan;
+            let priorityStr = 'Bình thường';
+            if (pRaw === 1 || pRaw === '1' || pRaw === 'Khẩn' || pRaw === 'khan') priorityStr = 'Khẩn';
+            else if (pRaw === 2 || pRaw === '2' || pRaw === 'Thượng khẩn' || pRaw === 'thuong_khan' || pRaw === 'Hỏa tốc') priorityStr = 'Thượng khẩn';
+
             html += `
                 <tr data-id="${id}" class="rpa-row-main ${isExpanded ? 'expanded' : ''}">
                     <td><input type="checkbox" class="rpa-row-check" data-id="${id}" ${doc.status === 'fill_done' ? '' : 'checked'}></td>
@@ -1166,12 +1228,16 @@
                                     <span class="rpa-detail-label">Loai van ban</span>
                                     <span class="rpa-detail-value">${doc.category || '---'}</span>
                                 </div>
+                                <div class="rpa-detail-field">
+                                    <span class="rpa-detail-label">Do khan</span>
+                                    <span class="rpa-detail-value highlight">${priorityStr}</span>
+                                </div>
                                 <div class="rpa-detail-field span-2">
                                     <span class="rpa-detail-label">Don vi phoi hop</span>
                                     <span class="rpa-detail-value">${coUnitsStr}</span>
                                 </div>
                                 <div class="rpa-detail-field">
-                                    <span class="rpa-detail-label">Ghi chu</span>
+                                    <span class="rpa-detail-label">Ghi chu / Noi dung</span>
                                     <span class="rpa-detail-value">${notes}</span>
                                 </div>
                             </div>
