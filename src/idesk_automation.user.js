@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         iDesk RPA Auto-Fill v2.3 (Minimalist Pure Text)
+// @name         iDesk RPA Auto-Fill v3.0 (Role: Chủ tịch - Minimalist Pure Text)
 // @namespace    http://inet.vn/
-// @version      2.3.0
-// @description  iDesk RPA: Giao diện Minimalist UI chuẩn (không icon/emoji), Tự động chọn Sổ văn bản đến theo backend AI, Tự động match file đính kèm theo số hiệu
+// @version      3.0.0
+// @description  iDesk RPA cho role Chủ tịch/Lãnh đạo xử lý chính: crawl metadata (Số hiệu, Loại VB, CQ ban hành, Ngày VB, Người ký, Trích yếu) + auto match file đính kèm theo số hiệu, gửi AI, tự động điền "Xử lý chính/Phối hợp/Hạn xử lý" và bấm "Chuyển xử lý". Không còn bước chọn "Sổ văn bản đến" (văn bản đã được Văn thư vào sổ trước đó).
 // @author       Senior Developer
 // @match        https://vpdt.gialai.gov.vn/*/smartcloud/idesk6/page/paperwork/index.cpx*
 // @match        https://vpdt.gialai.gov.vn/*/smartcloud/idesk6/page/paperwork/*
@@ -12,8 +12,8 @@
 // @grant        GM_addStyle
 // @grant        unsafeWindow
 // @run-at       document-end
-// @downloadURL  https://raw.githubusercontent.com/GMIOS25/Script-Idesk/main/src/idesk_automation.user.js
-// @updateURL    https://raw.githubusercontent.com/GMIOS25/Script-Idesk/main/src/idesk_automation.user.js
+// @downloadURL  https://raw.githubusercontent.com/GMIOS25/Script-Idesk/features/chairperson/src/idesk_automation.user.js
+// @updateURL    https://raw.githubusercontent.com/GMIOS25/Script-Idesk/features/chairperson/src/idesk_automation.user.js
 // ==/UserScript==
 
 (function() {
@@ -22,13 +22,15 @@
     // ============================================================
     // 1. CONFIGURATION
     // ============================================================
+    // Ghi chu: Backend AI hien tai (mock_backend.py, POST /api/process-doc) van dung hop dong
+    // cu (v1.0). Tai lieu docs/en/API_CONTRACT.md ban 2.2 mo ta hop dong moi (lookup/process,
+    // port 8000) nhung CHUA duoc trien khai o backend that/mock kem theo repo nay - vi vay
+    // callAIBackend() ben duoi CHUA doi theo hop dong moi, giu nguyen de tuong thich voi
+    // mock_backend.py hien co. Neu backend duoc nang cap len v2.2, can sua lai rieng.
     const CONFIG = {
         BACKEND_URL: 'http://localhost:5000/api/process-doc',
-        DEFAULT_BOOK: 'Số văn bản đến UBND tỉnh',
         DELAY_MS: {
             SELECT_DOC: 1000,
-            OPEN_SELECT2: 350,
-            AFTER_BOOK_SELECT: 700,
             CLICK_SAVE_TRANSFER: 1200,
             OPEN_TREE: 800,
             TREE_SEARCH: 500,
@@ -38,12 +40,17 @@
         }
     };
 
+    // Cac selector duoi day khop voi resource/"Chủ tịch role" (qsprocess.cpx, view.cpx,
+    // left_panel.html, right_panel.html, right_panel_after_save_and_transfer.html) - DA doi
+    // chieu truc tiep va CHINH XAC 100%: panel "Chuyen xu ly" dung chung 1 component
+    // (id "ed-transfer-*") cho ca role Van thu lan Chu tich, chi khac o cach mo panel (Van thu
+    // phai chon "So van ban den" truoc, Chu tich bam thang "Chuyen xu ly").
     const S = {
         LEFT_LIST: '#listview-process-list-list-content div.messageListItem',
         LEFT_LIST_FALLBACK: 'div.messageListItem[data-id]',
-        SHOW_MORE: '#edocs-btn-hide-show-more-info',
-        BOOK_INPUT: '#edocs-txt-book',
+        // "Chuyen xu ly" trong man hinh chi tiet VB (resource/Chủ tịch role/right_panel.html, dong 33)
         SAVE_TRANSFER_BTN: '#ed-view-btn-transfer',
+        // Panel hien ra sau khi bam "Chuyen xu ly" (resource/Chủ tịch role/right_panel_after_save_and_transfer.html)
         TRANSFER_CONTAINER: '#ed-transfer-document-container',
         RESPONSIBLE_LINK: '#ed-transfer-select-user-responsible a.user-box-link',
         RESPONSIBLE_WRAP: '#ed-transfer-select-user-responsible',
@@ -51,7 +58,11 @@
         PARTICIPANTS_WRAP: '#ed-transfer-select-user-participants',
         DEADLINE_INPUT: '#ed-transfer-txt-deadline',
         DEADLINE_NUMBER: '#ed-transfer-txt-deadline-number',
-        AGREE_BTN: '#ed-transfer-btn-transfer'
+        // "Doc thu" bo sung (chua tu dong dien, xem ghi chu trong autoFillAndSubmit)
+        PRIORITY_SELECT: '#ed-transfer-select-priority',
+        CONTENT_TEXTAREA: '#ed-transfer-txt-content',
+        AGREE_BTN: '#ed-transfer-btn-transfer',
+        CANCEL_BTN: '#ed-transfer-btn-cancel'
     };
 
     // ============================================================
@@ -62,6 +73,8 @@
     const expandedRows = new Set(); // Set<id> các bản ghi đang mở chi tiết
     let isProcessing = false;
     let logPanel = null;
+    let basePath = '';   // vd: "/cumvinhthanh/smartcloud" - tu dong phat hien theo don vi dang dang nhap
+    let execAcode = '';  // receiverAcode cua nguoi dang dang nhap (Chu tich/Lanh dao) - dung cho exeacode khi goi lai view.cpx thu cong
 
     // ============================================================
     // 3. HELPERS
@@ -100,21 +113,46 @@
         return formatDate(date);
     };
 
-    const getSelect2Container = (originalFieldId) => {
-        const hiddenEl = document.querySelector(originalFieldId);
-        if (!hiddenEl) return null;
-        const prev = hiddenEl.previousElementSibling;
-        if (prev && prev.classList.contains('select2-container')) return prev;
-        const next = hiddenEl.nextElementSibling;
-        if (next && next.classList.contains('select2-container')) return next;
-        const parent = hiddenEl.closest('.row-fluid, .span4, .span3, div');
-        return parent ? parent.querySelector('.select2-container') : null;
-    };
-
     const getVisibleItems = () => {
         let items = Array.from(document.querySelectorAll(S.LEFT_LIST));
         if (items.length === 0) items = Array.from(document.querySelectorAll(S.LEFT_LIST_FALLBACK));
         return items.filter(el => el.offsetParent !== null);
+    };
+
+    // Tu dong phat hien duong dan goc cua he thong (vd "/cumvinhthanh/smartcloud") tu URL
+    // request that trinh duyet da goi - de khong phai hardcode ten don vi (moi don vi/tinh
+    // co the co ma khac nhau, vd "cumphumy" cho Van thu Phu My vs "cumvinhthanh" cho Chu tich
+    // Vinh Thanh trong bo resource duoc cung cap).
+    const deriveBasePath = (url) => {
+        const m = (url || '').match(/(\/[^\/?]+\/smartcloud)(?=\/)/);
+        return m ? m[1] : null;
+    };
+
+    const ensureBasePath = (url) => {
+        if (basePath) return;
+        const derived = deriveBasePath(url);
+        if (derived) {
+            basePath = derived;
+            appendLog(`Da xac dinh duong dan goc he thong: ${basePath}`);
+        }
+    };
+
+    // Fallback khi chua kip bat duoc basePath tu network (edge-case truoc khi co request nao)
+    const getFallbackBasePath = () => {
+        const seg = window.location.pathname.split('/').filter(Boolean)[0];
+        return seg ? `/${seg}/smartcloud` : '/smartcloud';
+    };
+
+    // Tim phan tu theo noi dung text hien thi (dung khi id chinh xac chua duoc xac nhan tren
+    // giao dien that, vd khu vuc "Chuyen xu ly" cua role Chu tich)
+    const findByVisibleText = (root, selector, texts) => {
+        const scope = root || document;
+        const nodes = scope.querySelectorAll(selector);
+        for (const el of nodes) {
+            const t = (el.textContent || el.value || '').trim();
+            if (texts.includes(t) && el.offsetParent !== null) return el;
+        }
+        return null;
     };
 
     // ============================================================
@@ -169,6 +207,9 @@
             this.addEventListener('load', function() {
                 try {
                     const url = this._url || '';
+                    if (url.includes('qsprocess.cpx') || url.includes('view.cpx') || url.includes('fbyvsphere.cpx')) {
+                        ensureBasePath(url);
+                    }
                     if (url.includes('qsprocess.cpx')) {
                         handleListResponse(JSON.parse(this.responseText));
                     } else if (url.includes('view.cpx') && url.includes('exeacode=')) {
@@ -188,6 +229,7 @@
             const url = typeof input === 'string' ? input : (input.url || '');
             return origFetch(input, init).then(async (response) => {
                 if (url.includes('qsprocess.cpx') || url.includes('view.cpx') || url.includes('fbyvsphere.cpx')) {
+                    ensureBasePath(url);
                     const clone = response.clone();
                     try {
                         const data = await clone.json();
@@ -206,7 +248,7 @@
     // ============================================================
     const handleListResponse = (data) => {
         if (!data || !data.items) return;
-        appendLog(`API qsreceiving: ${data.items.length} van ban`);
+        appendLog(`API qsprocess: ${data.items.length} van ban`);
         data.items.forEach(item => {
             const id = item.id.toString();
             const ed = item.edSearchDto || {};
@@ -219,6 +261,10 @@
             doc.signer = ed.signer || doc.signer || '';
             doc.docDateStr = ed.docDateStr || doc.docDateStr || '';
             doc.creatorAcode = ed.creatorAcode || doc.creatorAcode || '';
+            // "responsibility" (main/coordinate) va "book" (da vao so tu Van thu) chi co o
+            // role Chu tich/xu ly - dung de goi lai view.cpx dung tham so va hien thi thong tin
+            doc.responsibility = item.responsibility || doc.responsibility || 'main';
+            doc.book = item.book || doc.book || null;
             doc.status = doc.status || 'idle';
             doc.aiData = doc.aiData || null;
 
@@ -241,8 +287,10 @@
         doc.docDateStr = ed.docDateStr || doc.docDateStr || '';
         doc.creatorAcode = ed.creatorAcode || doc.creatorAcode || '';
         doc.attachments = data.attachments || doc.attachments || [];
+        doc.book = data.book || doc.book || null;
 
         docCache.set(id, doc);
+        updateExecAcodeFromView(data);
         updateDashboard();
     };
 
@@ -252,12 +300,30 @@
         appendLog(`API fbyvsphere: Cap nhat ${data.elements.length} don vi/ca nhan xu ly`);
     };
 
+    // Xac dinh "receiverAcode" cua nguoi dang dang nhap (Chu tich/Lanh dao xu ly chinh) tu
+    // response view.cpx (mang "senders"/"proInfos"), dung lam exeacode khi tu goi lai view.cpx.
+    // Voi role Van thu, doc.creatorAcode (da co san trong edSearchDto) chinh la ma dinh danh
+    // cua ho nen khong can co che nay; voi role Chu tich thi creatorAcode lai la ma cua Van thu
+    // (nguoi tao/vao so), khong phai cua Chu tich, nen phai lay tu "responsibility": "main".
+    const updateExecAcodeFromView = (data) => {
+        if (execAcode) return;
+        const pool = [];
+        if (Array.isArray(data.senders)) pool.push(...data.senders);
+        if (Array.isArray(data.proInfos)) pool.push(...data.proInfos);
+        const mainEntry = pool.find(e => e && e.responsibility === 'main' && e.receiverAcode);
+        if (mainEntry) {
+            execAcode = mainEntry.receiverAcode;
+            appendLog(`Da xac dinh ma dinh danh xu ly (exeacode): ${execAcode}`);
+        }
+    };
+
     // ============================================================
     // 7. DOWNLOAD PDF & CALL AI
     // ============================================================
     const downloadPDF = (contentUid, fileName) => {
         return new Promise((resolve, reject) => {
-            const url = `/cumphumy/smartcloud/docx/download.cpx?docID=${contentUid}&view=pdf&t=${Date.now()}`;
+            const bp = basePath || getFallbackBasePath();
+            const url = `${bp}/docx/download.cpx?docID=${contentUid}&view=pdf&t=${Date.now()}`;
             setStatus(`Dang tai PDF: ${fileName}...`);
 
             GM_xmlhttpRequest({
@@ -284,7 +350,10 @@
         let doc = docCache.get(id.toString()) || { id: id.toString(), status: 'idle' };
         docCache.set(id.toString(), doc);
 
-        if (!doc.creatorAcode || !doc.attachments || doc.attachments.length === 0) {
+        // Uu tien: click chon VB trong danh sach de trang tu goi view.cpx (voi exeacode dung
+        // ma he thong tu dien, khong phan biet role) - cach nay khong doi ma van hoat dong dung
+        // cho ca Van thu lan Chu tich vi day la request cua chinh trang, khong phai script tu tao.
+        if (!doc.attachments || doc.attachments.length === 0) {
             const itemEl = document.querySelector(`.messageListItem[data-id="${id}"]`);
             if (itemEl && !itemEl.classList.contains('selected')) {
                 itemEl.click();
@@ -293,9 +362,13 @@
             }
         }
 
-        if (doc.creatorAcode && (!doc.attachments || doc.attachments.length === 0)) {
+        // Fallback: tu goi view.cpx thu cong neu click chua kip tra ve attachments. Voi role
+        // Chu tich, exeacode phai la receiverAcode cua chinh minh (execAcode) + responsibility
+        // (thuong la "main"), KHONG phai doc.creatorAcode (do la ma cua Van thu da vao so VB).
+        if ((!doc.attachments || doc.attachments.length === 0) && execAcode) {
             try {
-                const resp = await fetch(`/cumphumy/smartcloud/document/edocs/view.cpx?exeacode=${doc.creatorAcode}&id=${id}`);
+                const bp = basePath || getFallbackBasePath();
+                const resp = await fetch(`${bp}/document/edocs/view.cpx?exeacode=${execAcode}&id=${id}&responsibility=${doc.responsibility || 'main'}`);
                 if (resp.ok) {
                     handleViewResponse(await resp.json());
                     doc = docCache.get(id.toString()) || doc;
@@ -303,6 +376,8 @@
             } catch (e) {
                 appendLog(`Fetch view.cpx cho ${id} loi: ${e.message}`);
             }
+        } else if ((!doc.attachments || doc.attachments.length === 0) && !execAcode) {
+            appendLog(`Chua xac dinh duoc exeacode xu ly - bo qua fetch thu cong cho VB ${id} (can mo it nhat 1 VB truoc de he thong tra ve receiverAcode).`);
         }
 
         return doc;
@@ -356,38 +431,12 @@
     };
 
     // ============================================================
-    // 8. IDESK FORM AUTOMATION (DYNAMIC SỔ VĂN BẢN ĐẾN FROM BACKEND)
+    // 8. IDESK FORM AUTOMATION (CHUYỂN XỬ LÝ - ROLE CHỦ TỊCH)
     // ============================================================
-    const selectBook = async (bookName) => {
-        const container = getSelect2Container(S.BOOK_INPUT);
-        if (!container) throw new Error('Khong thay Select2 cua So van ban den');
-
-        const trigger = container.querySelector('.select2-choice');
-        if (!trigger) throw new Error('Khong tim thay nut chon So van ban');
-
-        const currentText = trigger.querySelector('.select2-chosen')?.textContent?.trim() || '';
-        if (currentText === bookName) return;
-
-        trigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-        await sleep(CONFIG.DELAY_MS.OPEN_SELECT2);
-
-        const drop = document.getElementById('select2-drop');
-        if (!drop) throw new Error('Khong mo duoc dropdown Select2');
-
-        const items = drop.querySelectorAll('ul.select2-results li');
-        let target = Array.from(items).find(li => li.textContent.trim() === bookName) ||
-                     Array.from(items).find(li => li.textContent.trim().includes(bookName)) ||
-                     items[0];
-
-        if (target) {
-            target.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
-            await sleep(CONFIG.DELAY_MS.AFTER_BOOK_SELECT);
-            appendLog(`Da chon so van ban den: "${target.textContent.trim()}"`);
-        } else {
-            document.body.click();
-            throw new Error('Khong tim thay so van ban den phu hop!');
-        }
-    };
+    // Ghi chu: Khac voi role Van thu (phai chon "So van ban den" truoc khi "Luu va chuyen"),
+    // van ban toi tay Chu tich da duoc Van thu vao so tu truoc (xem doc.book) nen khong con
+    // buoc chon so - chi can bam thang nut "Chuyen xu ly" (#ed-view-btn-transfer) roi dien
+    // "Xu ly chinh" / "Phoi hop xu ly" / "Han xu ly" nhu cu.
 
     const selectTreeItem = async (linkSelector, wrapSelector, targetName) => {
         if (!targetName || !targetName.trim()) return false;
@@ -459,39 +508,39 @@
             await sleep(CONFIG.DELAY_MS.SELECT_DOC);
         }
 
-        const showMoreBtn = document.querySelector(S.SHOW_MORE);
-        if (showMoreBtn && showMoreBtn.textContent.includes('Hien thi them')) {
-            showMoreBtn.click();
-            await sleep(200);
-        }
-
-        // Dynamic Sổ văn bản đến phân tích từ Backend
-        const targetBook = aiData.so_van_ban || aiData.book_name || CONFIG.DEFAULT_BOOK;
-        appendLog(`Chon So van ban den: ${targetBook}`);
-        await selectBook(targetBook);
-
-        const saveTransferBtn = document.querySelector(S.SAVE_TRANSFER_BTN);
-        if (!saveTransferBtn) throw new Error('Khong tim thay nut "Luu va chuyen"');
-        if (saveTransferBtn.disabled) {
+        // Role Chu tich: van ban da duoc Van thu vao so truoc do (doc.book), khong can chon
+        // "So van ban den" - bam thang nut "Chuyen xu ly"
+        const transferBtn = document.querySelector(S.SAVE_TRANSFER_BTN);
+        if (!transferBtn) throw new Error('Khong tim thay nut "Chuyen xu ly"');
+        if (transferBtn.disabled) {
             for (let i = 0; i < 10; i++) {
                 await sleep(500);
-                if (!saveTransferBtn.disabled) break;
+                if (!transferBtn.disabled) break;
             }
         }
-        if (saveTransferBtn.disabled) throw new Error('Nut "Luu va chuyen" khong enable!');
+        if (transferBtn.disabled) throw new Error('Nut "Chuyen xu ly" khong enable!');
 
-        saveTransferBtn.click();
-        appendLog('Da click "Luu va chuyen"');
+        transferBtn.click();
+        appendLog('Da click "Chuyen xu ly"');
         await sleep(CONFIG.DELAY_MS.CLICK_SAVE_TRANSFER);
 
-        if (!document.querySelector(S.TRANSFER_CONTAINER)) {
+        let container = document.querySelector(S.TRANSFER_CONTAINER);
+        if (!container) {
             for (let i = 0; i < 5; i++) {
                 await sleep(500);
-                if (document.querySelector(S.TRANSFER_CONTAINER)) break;
+                container = document.querySelector(S.TRANSFER_CONTAINER);
+                if (container) break;
             }
         }
-        if (!document.querySelector(S.TRANSFER_CONTAINER)) {
-            throw new Error('Khong thay form Thong tin xu ly!');
+        if (!container) {
+            // Fallback: id chinh xac cua panel "Chuyen xu ly" cho role Chu tich chua duoc xac
+            // nhan qua resource (file mau duoc cung cap rong) - thu tim theo nut "Dong y" dang
+            // hien thi de xac dinh vung form.
+            const agreeGuess = findByVisibleText(document, 'button, a', ['Đồng ý', 'Dong y']);
+            container = agreeGuess ? (agreeGuess.closest('div[id], form, .modal, .popover') || document) : null;
+        }
+        if (!container) {
+            throw new Error('Khong thay form "Thong tin xu ly" (kiem tra lai S.TRANSFER_CONTAINER cho giao dien Chu tich)');
         }
 
         const mainUnit = aiData.don_vi_xu_ly || aiData.processing_unit;
@@ -532,7 +581,14 @@
             }
         }
 
-        const agreeBtn = document.querySelector(S.AGREE_BTN);
+        // Ghi chu: panel "Chuyen xu ly" cua role Chu tich con co them 2 truong "Do khan"
+        // (S.PRIORITY_SELECT) va "Noi dung" (S.CONTENT_TEXTAREA) ma ban Van thu khong co -
+        // hien CHUA tu dong dien 2 truong nay de giu dung pham vi "cung chuc nang nhu Van thu
+        // da lam". Neu muon tu dong dien them (vd Noi dung = aiData.ghi_chu/notes), chi can bao
+        // de bo sung, cau truc san sang (S.CONTENT_TEXTAREA la <textarea>, S.PRIORITY_SELECT la
+        // <select> voi value 0=Binh thuong/1=Khan/2=Thuong khan).
+
+        const agreeBtn = document.querySelector(S.AGREE_BTN) || findByVisibleText(container, 'button, a', ['Đồng ý', 'Dong y']);
         if (!agreeBtn) throw new Error('Khong tim thay nut "Dong y"!');
         if (agreeBtn.disabled) {
             for (let i = 0; i < 5; i++) {
@@ -1054,7 +1110,9 @@
 
             const ai = doc.aiData || {};
             const summary = ai.tom_tat || ai.summary || '---';
-            const bookName = ai.so_van_ban || ai.book_name || '---';
+            const bookInfo = doc.book
+                ? `So ${doc.book.serialNumber || '---'}${doc.book.dateStr ? ' (' + formatDate(new Date(doc.book.dateStr)) + ')' : ''}`
+                : '---';
             const mainUnit = ai.don_vi_xu_ly || ai.processing_unit || '---';
             const leader = ai.lanh_dao_theo_doi || ai.monitoring_leader || '---';
             const days = ai.thoi_han_thuc_hien || ai.implementation_deadline;
@@ -1085,8 +1143,8 @@
                                     <span class="rpa-detail-value highlight">${summary}</span>
                                 </div>
                                 <div class="rpa-detail-field">
-                                    <span class="rpa-detail-label">So van ban den (AI chon)</span>
-                                    <span class="rpa-detail-value highlight">${bookName}</span>
+                                    <span class="rpa-detail-label">Da vao so (Van thu)</span>
+                                    <span class="rpa-detail-value highlight">${bookInfo}</span>
                                 </div>
                                 <div class="rpa-detail-field">
                                     <span class="rpa-detail-label">Don vi xu ly chinh</span>
