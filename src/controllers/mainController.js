@@ -5,7 +5,8 @@ import { sleep } from '../utils/helpers.js';
 import { ensureDocDetails } from '../services/api.js';
 import { callAIBackend } from '../services/ai.js';
 import { autoFillAndSubmit } from '../automation/formFiller.js';
-import { updateDashboard, scanList } from '../ui/dashboard.js';
+import { scanList } from '../services/scanner.js';
+import { on, emit } from '../core/bus.js';
 
 export const scanAndSendAll = async () => {
     if (state.isProcessing) return alert('Dang xu ly, vui long cho!');
@@ -32,7 +33,7 @@ export const scanAndSendAll = async () => {
         if (!doc) continue;
 
         doc.status = 'pending';
-        updateDashboard();
+        emit('docs-changed');
         updateProgress(i, total);
 
         try {
@@ -49,7 +50,7 @@ export const scanAndSendAll = async () => {
             errors++;
             appendLog(`${doc.signNumber}: ${err.message}`);
         }
-        updateDashboard();
+        emit('docs-changed');
         updateProgress(i + 1, total);
     }
 
@@ -92,7 +93,7 @@ export const runFillOnAll = async () => {
             errors++;
             appendLog(`Loi ${doc.signNumber}: ${err.message}`);
         }
-        updateDashboard();
+        emit('docs-changed');
         updateProgress(i + 1, total);
         await sleep(CONFIG.DELAY_MS.BETWEEN_DOCS);
     }
@@ -103,10 +104,11 @@ export const runFillOnAll = async () => {
 };
 
 export const updateProgress = (current, total) => {
-    const fill = document.getElementById('rpa-progress-fill');
-    const text = document.getElementById('rpa-progress-text');
-    if (fill && text) {
-        fill.style.width = (total > 0 ? Math.round((current / total) * 100) : 0) + '%';
-        text.textContent = `${current}/${total}`;
-    }
+    emit('progress', { current, total });
 };
+
+// Logic tự đăng ký lắng nghe thao tác của người dùng trên UI, thay vì UI import thẳng
+// hàm của controller. Nhờ đó ui/dashboard.js và controllers/mainController.js không
+// còn import lẫn nhau (không còn circular dependency).
+on('scan-requested', scanAndSendAll);
+on('fill-requested', runFillOnAll);

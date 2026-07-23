@@ -1,8 +1,8 @@
 import { docCache } from '../state.js';
 import { CSS_STYLES } from './styles.js';
-import { setStatus, appendLog } from '../utils/logger.js';
-import { formatDate, getVisibleItems, sleep } from '../utils/helpers.js';
-import { scanAndSendAll, runFillOnAll } from '../controllers/mainController.js';
+import { appendLog } from '../utils/logger.js';
+import { formatDate } from '../utils/helpers.js';
+import { on, emit } from '../core/bus.js';
 
 let logPanel = null;
 
@@ -55,8 +55,8 @@ export const createDashboard = () => {
 
     document.getElementById('rpa-btn-minimize').addEventListener('click', () => hub.classList.toggle('minimized'));
     document.getElementById('rpa-btn-toggle-log').addEventListener('click', () => logPanel.classList.toggle('open'));
-    document.getElementById('rpa-btn-scan').addEventListener('click', scanAndSendAll);
-    document.getElementById('rpa-btn-fill-all').addEventListener('click', runFillOnAll);
+    document.getElementById('rpa-btn-scan').addEventListener('click', () => emit('scan-requested'));
+    document.getElementById('rpa-btn-fill-all').addEventListener('click', () => emit('fill-requested'));
     document.getElementById('rpa-check-all').addEventListener('change', (e) => {
         document.querySelectorAll('.rpa-row-check').forEach(cb => cb.checked = e.target.checked);
     });
@@ -65,6 +65,9 @@ export const createDashboard = () => {
         allCb.checked = !allCb.checked;
         allCb.dispatchEvent(new Event('change'));
     });
+
+    on('docs-changed', updateDashboard);
+    on('progress', ({ current, total }) => setProgress(current, total));
 
     appendLog('Khởi tạo iDesk RPA Card Feed UI v3.0');
 };
@@ -215,39 +218,12 @@ export const updateDashboard = () => {
     cardFeed.innerHTML = html;
 };
 
-export const scanList = async (retries = 3) => {
-    setStatus('Đang quét danh sách văn bản...');
-    let items = getVisibleItems();
-    let attempt = 0;
-    while (items.length === 0 && attempt < retries) {
-        attempt++;
-        await sleep(800);
-        items = getVisibleItems();
+// UI sở hữu trọn vẹn progress bar. Logic chỉ emit('progress', {current, total}), không tự query DOM nữa.
+export const setProgress = (current, total) => {
+    const fill = document.getElementById('rpa-progress-fill');
+    const text = document.getElementById('rpa-progress-text');
+    if (fill && text) {
+        fill.style.width = (total > 0 ? Math.round((current / total) * 100) : 0) + '%';
+        text.textContent = `${current}/${total}`;
     }
-
-    if (items.length === 0) {
-        setStatus('Không tìm thấy văn bản.');
-        return 0;
-    }
-
-    let newCount = 0;
-    items.forEach(el => {
-        const id = el.getAttribute('data-id');
-        if (id && !docCache.has(id)) {
-            docCache.set(id, {
-                id,
-                signNumber: el.querySelector('.sender')?.textContent?.trim() || '',
-                subject: el.querySelector('.subject')?.textContent?.trim() || '',
-                status: 'idle',
-                aiData: null,
-                attachments: [],
-                creatorAcode: ''
-            });
-            newCount++;
-        }
-    });
-
-    updateDashboard();
-    setStatus(`Đã quét: ${docCache.size} VB (${newCount} mới)`);
-    return items.length;
 };

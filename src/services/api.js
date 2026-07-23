@@ -2,7 +2,7 @@ import { CONFIG } from '../config.js';
 import { docCache, unitCache, state, setExecAcode } from '../state.js';
 import { appendLog } from '../utils/logger.js';
 import { sleep, ensureBasePath, getFallbackBasePath } from '../utils/helpers.js';
-import { updateDashboard } from '../ui/dashboard.js';
+import { emit } from '../core/bus.js';
 
 export const handleListResponse = (data) => {
     if (!data || !data.items) return;
@@ -26,7 +26,7 @@ export const handleListResponse = (data) => {
 
         docCache.set(id, doc);
     });
-    updateDashboard();
+    emit('docs-changed');
 };
 
 export const handleViewResponse = (data) => {
@@ -47,7 +47,7 @@ export const handleViewResponse = (data) => {
 
     docCache.set(id, doc);
     updateExecAcodeFromView(data);
-    updateDashboard();
+    emit('docs-changed');
 };
 
 export const handleUnitsResponse = (data) => {
