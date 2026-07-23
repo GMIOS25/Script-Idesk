@@ -106,3 +106,13 @@ export const findByVisibleText = (root, selector, texts) => {
     }
     return null;
 };
+
+// utils/helpers.js
+export const toISODateOnly = (value) => {
+    if (!value) return '';
+    const s = String(value).trim();
+    const isoPrefix = s.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (isoPrefix) return isoPrefix[1];
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
+};

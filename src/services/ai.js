@@ -141,7 +141,7 @@ export const callAIBackend = async (doc) => {
             document_number: doc.signNumber || '',
             document_type: doc.category || '',
             issuing_agency: doc.author || '',
-            document_date: doc.docDateStr || '',
+            document_date: toISODateOnly(doc.docDateStr),
             signer: doc.signer || '',
             subject: doc.subject || ''
         },
@@ -179,7 +179,7 @@ export const lookupDocument = async (doc) => {
         document_number: doc.signNumber || '',
         document_type: doc.category || '',
         issuing_agency: doc.author || '',
-        document_date: doc.docDateStr || '',
+        document_date: toISODateOnly(doc.docDateStr),
         signer: doc.signer || '',
         subject: doc.subject || ''
     };
