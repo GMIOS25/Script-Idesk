@@ -1,6 +1,13 @@
 export const CONFIG = {
     BACKEND_URL: 'http://localhost:5000/documents/process',
+    LOOKUP_URL: 'http://localhost:5000/documents/lookup',
+    PATCH_URL_BASE: 'http://localhost:5000/documents',
     AUTH_URL: 'http://localhost:5000/auth/token',
+    // Backoff cho 429 RATE_LIMITED / 503 SERVER_BUSY (docs/en/docflow.md muc 10)
+    RETRY: {
+        MAX_ATTEMPTS: 3,
+        BASE_DELAY_MS: 1000
+    },
     DELAY_MS: {
         SELECT_DOC: 1000,
         CLICK_SAVE_TRANSFER: 1200,

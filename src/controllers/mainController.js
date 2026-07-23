@@ -3,7 +3,7 @@ import { docCache, state, setProcessing } from '../state.js';
 import { setStatus, appendLog } from '../utils/logger.js';
 import { sleep } from '../utils/helpers.js';
 import { ensureDocDetails } from '../services/api.js';
-import { callAIBackend } from '../services/ai.js';
+import { callAIBackend, lookupDocument } from '../services/ai.js';
 import { autoFillAndSubmit } from '../automation/formFiller.js';
 import { scanList } from '../services/scanner.js';
 import { on, emit } from '../core/bus.js';
@@ -38,13 +38,29 @@ export const scanAndSendAll = async () => {
 
         try {
             const fullDoc = await ensureDocDetails(id);
-            if (fullDoc.attachments && fullDoc.attachments.length > 0) {
-                doc.aiData = await callAIBackend(fullDoc);
-                doc.status = 'ai_done';
-                success++;
-            } else {
+            if (!fullDoc.attachments || fullDoc.attachments.length === 0) {
                 throw new Error('Van ban khong co file dinh kem');
             }
+
+            // Tra cache truoc qua /documents/lookup (docs/en/docflow.md muc 5) de
+            // tranh goi lai OCR/AI cho van ban da xu ly xong tu truoc. Chi dung ket
+            // qua khi state = "completed"; moi truong hop khac (not_found,
+            // processing, failed_retryable, hoac loi lookup) deu roi ve /documents/process
+            // nhu luong cu, khong thay doi hanh vi hien tai.
+            let aiData = null;
+            try {
+                const lookupResult = await lookupDocument(fullDoc);
+                if (lookupResult && lookupResult.found && lookupResult.state === 'completed' && lookupResult.data) {
+                    aiData = lookupResult.data;
+                    appendLog(`${doc.signNumber}: da co san tu /documents/lookup, bo qua goi AI`);
+                }
+            } catch (lookupErr) {
+                appendLog(`${doc.signNumber}: lookup that bai (${lookupErr.message}), tiep tuc qua /documents/process`);
+            }
+
+            doc.aiData = aiData || await callAIBackend(fullDoc);
+            doc.status = 'ai_done';
+            success++;
         } catch (err) {
             doc.status = 'ai_error';
             errors++;
