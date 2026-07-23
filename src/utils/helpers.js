@@ -52,3 +52,14 @@ export const findByVisibleText = (root, selector, texts) => {
     }
     return null;
 };
+
+/**
+ * Loại bỏ hậu tố " - Tỉnh Gia Lai" khỏi tên cơ quan ban hành khi hiển thị.
+ * Không thay đổi dữ liệu gốc.
+ * @param {string} name - Tên cơ quan ban hành
+ * @returns {string} Tên đã được rút gọn
+ */
+export const stripAgencySuffix = (name) => {
+    if (!name || name === '---') return name;
+    return name.replace(/\s*-\s*Tỉnh\s+Gia\s+Lai\s*$/i, '').trim();
+};

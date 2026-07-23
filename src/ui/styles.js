@@ -178,10 +178,10 @@ export const CSS_STYLES = `
         background: #161618 !important;
         border: 1px solid #28282B !important;
         border-radius: 8px !important;
-        padding: 16px 18px !important;
+        padding: 14px 16px !important;
         display: flex !important;
         flex-direction: column !important;
-        gap: 12px !important;
+        gap: 10px !important;
         transition: border-color 0.15s, background 0.15s !important;
     }
     .rpa-doc-card:hover {
@@ -189,58 +189,71 @@ export const CSS_STYLES = `
         background: #18181B !important;
     }
 
-    /* Card Header */
+    /* Card Header — flex-wrap badges row */
     .rpa-card-header {
         display: flex !important;
-        justify-content: space-between !important;
-        align-items: center !important;
-        gap: 10px !important;
+        align-items: flex-start !important;
+        gap: 8px !important;
         padding-bottom: 10px !important;
         border-bottom: 1px solid #242427 !important;
     }
     .rpa-card-header-left {
+        flex: 1 !important;
         display: flex !important;
         align-items: center !important;
-        gap: 10px !important;
+        gap: 6px !important;
         flex-wrap: wrap !important;
+        min-width: 0 !important;
     }
     .rpa-card-header-right {
+        flex-shrink: 0 !important;
         display: flex !important;
         align-items: center !important;
     }
 
-    .rpa-doc-code {
+    /* === Unified Badge Chip (Header metadata) === */
+    .rpa-badge-chip {
+        display: inline-flex !important;
+        align-items: center !important;
         font-family: 'Geist Mono', 'SF Mono', monospace !important;
-        font-weight: 700 !important;
-        color: #FFFFFF !important;
-        font-size: 14px !important;
-        background: #242427 !important;
-        padding: 2px 8px !important;
-        border-radius: 4px !important;
-        border: 1px solid #333338 !important;
-    }
-
-    /* Tags */
-    .rpa-tag {
         font-size: 11px !important;
+        font-weight: 500 !important;
+        color: #C4C4C7 !important;
+        background: #1E1E21 !important;
+        border: 1px solid #2E2E32 !important;
         padding: 2px 8px !important;
         border-radius: 4px !important;
-        font-weight: 500 !important;
-        letter-spacing: 0.02em !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        max-width: 260px !important;
+        line-height: 1.4 !important;
+        transition: border-color 0.12s, background 0.12s !important;
     }
-    .rpa-tag-type {
-        background: #27272A !important;
-        color: #A1A1AA !important;
-        border: 1px solid #3F3F46 !important;
+    .rpa-badge-chip:hover {
+        border-color: #4A4A50 !important;
+        background: #252529 !important;
     }
-    .rpa-tag-priority {
-        background: #FBF3DB !important;
-        color: #956400 !important;
-        border: 1px solid #F7E4A9 !important;
-        font-weight: 600 !important;
+    .rpa-badge-chip.is-signnumber {
+        color: #FFFFFF !important;
+        font-weight: 700 !important;
+        background: #28282E !important;
+        border-color: #3A3A42 !important;
+        font-size: 12px !important;
+    }
+    .rpa-badge-chip.is-signnumber:hover {
+        background: #303036 !important;
+        border-color: #505058 !important;
     }
 
-    /* Status Badges */
+    /* === Priority chip — subtle accent, not louder than signnumber === */
+    .rpa-badge-chip.is-priority {
+        color: #F5A623 !important;
+        background: #2A2315 !important;
+        border-color: #3D2F1A !important;
+    }
+
+    /* === Status Badge (pill, round) === */
     .rpa-badge {
         display: inline-flex !important;
         align-items: center !important;
@@ -261,7 +274,7 @@ export const CSS_STYLES = `
     .rpa-card-body {
         display: flex !important;
         flex-direction: column !important;
-        gap: 12px !important;
+        gap: 10px !important;
     }
 
     .rpa-card-subject {
@@ -284,7 +297,7 @@ export const CSS_STYLES = `
         border: 1px solid #242427 !important;
         border-left: 3px solid #EAEAEA !important;
         border-radius: 6px !important;
-        padding: 12px 14px !important;
+        padding: 10px 14px !important;
     }
     .rpa-summary-title {
         font-size: 10px !important;
@@ -302,38 +315,47 @@ export const CSS_STYLES = `
         white-space: pre-wrap !important;
     }
 
-    /* Meta Grid */
-    .rpa-card-meta-grid {
+    /* === Assignment Grid (4 columns: unit, co-unit, leader, deadline) === */
+    .rpa-assignment-grid {
         display: grid !important;
-        grid-template-columns: repeat(3, 1fr) !important;
-        gap: 12px !important;
+        grid-template-columns: 1fr 1fr !important;
+        gap: 10px !important;
         background: #131315 !important;
         border: 1px solid #222225 !important;
-        padding: 12px 14px !important;
+        padding: 10px 12px !important;
         border-radius: 6px !important;
     }
 
-    .rpa-meta-item {
+    .rpa-assign-item {
         display: flex !important;
         flex-direction: column !important;
-        gap: 4px !important;
+        gap: 2px !important;
+        min-width: 0 !important;
     }
-    .rpa-meta-label {
+    .rpa-assign-item.span-full {
+        grid-column: 1 / -1 !important;
+    }
+
+    .rpa-assign-label {
         font-size: 10px !important;
         text-transform: uppercase !important;
         letter-spacing: 0.05em !important;
         color: #71717A !important;
         font-weight: 600 !important;
     }
-    .rpa-meta-value {
-        font-size: 13px !important;
+    .rpa-assign-value {
+        font-size: 12px !important;
         color: #D4D4D8 !important;
+        line-height: 1.4 !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
     }
-    .rpa-meta-value.main-unit {
+    .rpa-assign-value.is-main-unit {
         color: #FFFFFF !important;
         font-weight: 600 !important;
     }
-    .rpa-meta-value.deadline {
+    .rpa-assign-value.is-deadline {
         font-family: 'Geist Mono', 'SF Mono', monospace !important;
         color: #FFFFFF !important;
         font-weight: 500 !important;
@@ -348,22 +370,9 @@ export const CSS_STYLES = `
         background: #242427 !important;
         border: 1px solid #333338 !important;
         color: #D4D4D8 !important;
-        padding: 1px 8px !important;
+        padding: 1px 7px !important;
         border-radius: 4px !important;
         font-size: 11px !important;
-    }
-
-    /* Card Footer Meta */
-    .rpa-card-footer-meta {
-        display: flex !important;
-        flex-wrap: wrap !important;
-        gap: 16px !important;
-        font-size: 11px !important;
-        color: #888888 !important;
-        padding-top: 4px !important;
-    }
-    .rpa-card-footer-meta strong {
-        color: #A1A1AA !important;
     }
 
     /* ===== LOG PANEL ===== */

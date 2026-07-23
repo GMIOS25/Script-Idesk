@@ -1,7 +1,7 @@
 import { docCache } from '../state.js';
 import { CSS_STYLES } from './styles.js';
 import { appendLog } from '../utils/logger.js';
-import { formatDate } from '../utils/helpers.js';
+import { formatDate, stripAgencySuffix } from '../utils/helpers.js';
 import { on, emit } from '../core/bus.js';
 
 let logPanel = null;
@@ -111,6 +111,21 @@ export const makeDraggable = (elmnt) => {
     header.addEventListener('pointercancel', stop);
 };
 
+/**
+ * Escape HTML entities for safe rendering inside title/attributes.
+ */
+const escHtml = (str) => {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&' + 'amp;')
+        .replace(/"/g, '&' + 'quot;')
+        .replace(/'/g, '&' + '#39;')
+        .replace(/</g, '&' + 'lt;')
+        .replace(/>/g, '&' + 'gt;');
+};
+
+const escAttr = (str) => escHtml(str);
+
 export const updateDashboard = () => {
     const cardFeed = document.getElementById('rpa-card-feed');
     if (!cardFeed) return;
@@ -119,12 +134,12 @@ export const updateDashboard = () => {
     if (countEl) countEl.textContent = docCache.size.toString();
 
     if (docCache.size === 0) {
-        cardFeed.innerHTML = `<div class="rpa-empty-state">Nhấn "Quét &amp; Gửi AI" để bắt đầu...</div>`;
+        cardFeed.innerHTML = `<div class="rpa-empty-state">Nhấn "Quét & Gửi AI" để bắt đầu...</div>`;
         return;
     }
 
     let html = '';
-        docCache.forEach((doc, id) => {
+    docCache.forEach((doc, id) => {
         const statusMap = {
             'idle': ['rpa-badge-idle', 'Chưa gửi'],
             'pending': ['rpa-badge-pending', 'Đang gửi'],
@@ -137,37 +152,62 @@ export const updateDashboard = () => {
 
         const ai = doc.aiData || {};
         const summary = ai.tom_tat || ai.summary || 'Chưa có tóm tắt AI...';
-        const bookInfo = doc.book
-            ? `Số ${doc.book.serialNumber || '---'}${doc.book.dateStr ? ' (' + formatDate(new Date(doc.book.dateStr)) + ')' : ''}`
-            : '---';
+
+        // --- Metadata values ---
+        const signNumber = doc.signNumber || ai.document_number || '---';
+        const docType = doc.category || ai.document_type || ai.loai_van_ban || '';
+        const agency = stripAgencySuffix(doc.author || ai.issuing_agency || '---');
+        const signer = doc.signer || ai.signer || '---';
+        const bookSerial = doc.book ? doc.book.serialNumber || '---' : '---';
+        const docDate = doc.docDateStr || '';
+
+        // --- Assignment ---
         const mainUnit = ai.don_vi_xu_ly || ai.processing_unit || '---';
         const leader = ai.lanh_dao_theo_doi || ai.monitoring_leader || '---';
         const days = ai.thoi_han_thuc_hien || ai.implementation_deadline;
         const daysStr = days ? `${days} ngày` : '---';
         const coUnits = ai.don_vi_phoi_hop || ai.coordinating_units;
-        const notes = ai.ghi_chu || ai.notes || '---';
-        const docType = doc.category || ai.document_type || ai.loai_van_ban || '';
 
-        let coUnitsPills = '<span class="rpa-meta-value">---</span>';
+        let coUnitsPills = '<span class="rpa-assign-value">---</span>';
         if (Array.isArray(coUnits) && coUnits.length > 0) {
-            coUnitsPills = coUnits.map(u => `<span class="rpa-unit-pill">${u}</span>`).join(' ');
+            coUnitsPills = coUnits.map(u => `<span class="rpa-unit-pill">${escAttr(u)}</span>`).join(' ');
         } else if (typeof coUnits === 'string' && coUnits.trim() && coUnits !== '---') {
-            coUnitsPills = `<span class="rpa-unit-pill">${coUnits.trim()}</span>`;
+            coUnitsPills = `<span class="rpa-unit-pill">${escAttr(coUnits.trim())}</span>`;
         }
 
+        // --- Priority ---
         const pRaw = (ai.priority !== undefined && ai.priority !== null) ? ai.priority : ai.do_khan;
-        let priorityStr = 'Bình thường';
+        let priorityStr = '';
         if (pRaw === 1 || pRaw === '1' || pRaw === 'Khẩn' || pRaw === 'khan') priorityStr = 'Khẩn';
         else if (pRaw === 2 || pRaw === '2' || pRaw === 'Thượng khẩn' || pRaw === 'thuong_khan' || pRaw === 'Hỏa tốc') priorityStr = 'Thượng khẩn';
+
+        // --- Build header badge chips ---
+        const escSign = escAttr(signNumber);
+        const escType = escAttr(docType);
+        const escAgency = escAttr(agency);
+        const escSigner = escAttr(signer);
+        const escBook = escAttr(bookSerial);
+
+        const chipSign = `<span class="rpa-badge-chip is-signnumber" title="${escSign}">${escSign}</span>`;
+        const chipType = docType ? `<span class="rpa-badge-chip" title="${escType}">${escType}</span>` : '';
+        const chipAgency = agency !== '---' ? `<span class="rpa-badge-chip" title="${escAgency}">CQ: ${escAgency}</span>` : '';
+        const chipSigner = signer !== '---' ? `<span class="rpa-badge-chip" title="${escSigner}">Ký: ${escSigner}</span>` : '';
+        const chipBook = bookSerial !== '---' ? `<span class="rpa-badge-chip" title="Số: ${escBook}">Sổ: ${escBook}</span>` : '';
+        const chipDate = docDate ? `<span class="rpa-badge-chip" title="${docDate}">${docDate}</span>` : '';
+        const chipPriority = priorityStr ? `<span class="rpa-badge-chip is-priority" title="${priorityStr}">${priorityStr}</span>` : '';
 
         html += `
             <div data-id="${id}" class="rpa-doc-card">
                 <div class="rpa-card-header">
                     <div class="rpa-card-header-left">
                         <input type="checkbox" class="rpa-row-check" data-id="${id}" ${doc.status === 'fill_done' ? '' : 'checked'}>
-                        <span class="rpa-doc-code" title="Số hiệu">${doc.signNumber || ai.document_number || '---'}</span>
-                        ${docType ? `<span class="rpa-tag rpa-tag-type">${docType}</span>` : ''}
-                        ${priorityStr !== 'Bình thường' ? `<span class="rpa-tag rpa-tag-priority">${priorityStr}</span>` : ''}
+                        ${chipSign}
+                        ${chipType}
+                        ${chipPriority}
+                        ${chipAgency}
+                        ${chipSigner}
+                        ${chipBook}
+                        ${chipDate}
                     </div>
                     <div class="rpa-card-header-right">
                         <span class="rpa-badge ${s[0]}">${s[1]}</span>
@@ -184,31 +224,23 @@ export const updateDashboard = () => {
                         <div class="rpa-summary-text">${summary}</div>
                     </div>
 
-                    <div class="rpa-card-meta-grid">
-                        <div class="rpa-meta-item highlight-unit">
-                            <span class="rpa-meta-label">Đơn vị xử lý chính</span>
-                            <span class="rpa-meta-value main-unit">${mainUnit}</span>
+                    <div class="rpa-assignment-grid">
+                        <div class="rpa-assign-item">
+                            <span class="rpa-assign-label">Đơn vị xử lý chính</span>
+                            <span class="rpa-assign-value is-main-unit" title="${escAttr(mainUnit)}">${mainUnit}</span>
                         </div>
-
-                        <div class="rpa-meta-item">
-                            <span class="rpa-meta-label">Đơn vị phối hợp</span>
-                            <div class="rpa-unit-tags">
-                                ${coUnitsPills}
-                            </div>
+                        <div class="rpa-assign-item">
+                            <span class="rpa-assign-label">Đơn vị phối hợp</span>
+                            <div class="rpa-unit-tags">${coUnitsPills}</div>
                         </div>
-
-                        <div class="rpa-meta-item highlight-deadline">
-                            <span class="rpa-meta-label">Hạn thực hiện / Ngày VB</span>
-                            <span class="rpa-meta-value deadline">${daysStr}${doc.docDateStr ? ' • Ngày ' + doc.docDateStr : ''}</span>
+                        <div class="rpa-assign-item">
+                            <span class="rpa-assign-label">Lãnh đạo theo dõi</span>
+                            <span class="rpa-assign-value" title="${escAttr(leader)}">${leader}</span>
                         </div>
-                    </div>
-
-                    <div class="rpa-card-footer-meta">
-                        <span><strong>Cơ quan ban hành:</strong> ${doc.author || ai.issuing_agency || '---'}</span>
-                        <span><strong>Người ký:</strong> ${doc.signer || ai.signer || '---'}</span>
-                        <span><strong>Lãnh đạo theo dõi:</strong> ${leader}</span>
-                        <span><strong>Đã vào sổ:</strong> ${bookInfo}</span>
-                        ${(notes && notes !== '---') ? `<span><strong>Ghi chú:</strong> ${notes}</span>` : ''}
+                        <div class="rpa-assign-item">
+                            <span class="rpa-assign-label">Hạn thực hiện</span>
+                            <span class="rpa-assign-value is-deadline">${daysStr}</span>
+                        </div>
                     </div>
                 </div>
             </div>
