@@ -1,11 +1,7 @@
 import { docCache } from '../state.js';
 import { CSS_STYLES } from './styles.js';
 import { appendLog } from '../utils/logger.js';
-<<<<<<< HEAD
-import { formatDate, stripAgencySuffix } from '../utils/helpers.js';
-=======
-import { formatDate, resolveDeadlineDate } from '../utils/helpers.js';
->>>>>>> d558f2d01e5c6e7ad1fc3792f48bca950be709ea
+import { stripAgencySuffix, resolveDeadlineDate } from '../utils/helpers.js';
 import { on, emit } from '../core/bus.js';
 
 let logPanel = null;
@@ -155,54 +151,28 @@ export const updateDashboard = () => {
         const s = statusMap[doc.status] || statusMap.idle;
 
         const ai = doc.aiData || {};
-<<<<<<< HEAD
-        const summary = ai.tom_tat || ai.summary || 'Chưa có tóm tắt AI...';
+        const summary = ai.summary || 'Chưa có tóm tắt AI...';
 
         // --- Metadata values ---
         const signNumber = doc.signNumber || ai.document_number || '---';
-        const docType = doc.category || ai.document_type || ai.loai_van_ban || '';
+        const docType = doc.category || ai.document_type || '';
         const agency = stripAgencySuffix(doc.author || ai.issuing_agency || '---');
         const signer = doc.signer || ai.signer || '---';
         const bookSerial = doc.book ? doc.book.serialNumber || '---' : '---';
         const docDate = doc.docDateStr || '';
 
         // --- Assignment ---
-        const mainUnit = ai.don_vi_xu_ly || ai.processing_unit || '---';
-        const leader = ai.lanh_dao_theo_doi || ai.monitoring_leader || '---';
-        const days = ai.thoi_han_thuc_hien || ai.implementation_deadline;
-        const daysStr = days ? `${days} ngày` : '---';
-        const coUnits = ai.don_vi_phoi_hop || ai.coordinating_units;
-
-        let coUnitsPills = '<span class="rpa-assign-value">---</span>';
-        if (Array.isArray(coUnits) && coUnits.length > 0) {
-            coUnitsPills = coUnits.map(u => `<span class="rpa-unit-pill">${escAttr(u)}</span>`).join(' ');
-        } else if (typeof coUnits === 'string' && coUnits.trim() && coUnits !== '---') {
-            coUnitsPills = `<span class="rpa-unit-pill">${escAttr(coUnits.trim())}</span>`;
-        }
-
-        // --- Priority ---
-        const pRaw = (ai.priority !== undefined && ai.priority !== null) ? ai.priority : ai.do_khan;
-        let priorityStr = '';
-        if (pRaw === 1 || pRaw === '1' || pRaw === 'Khẩn' || pRaw === 'khan') priorityStr = 'Khẩn';
-        else if (pRaw === 2 || pRaw === '2' || pRaw === 'Thượng khẩn' || pRaw === 'thuong_khan' || pRaw === 'Hỏa tốc') priorityStr = 'Thượng khẩn';
-=======
-        const summary = ai.summary || 'Chưa có tóm tắt AI...';
-        const bookInfo = doc.book
-            ? `Số ${doc.book.serialNumber || '---'}${doc.book.dateStr ? ' (' + formatDate(new Date(doc.book.dateStr)) + ')' : ''}`
-            : '---';
         const mainUnit = ai.processing_unit || '---';
         const leader = ai.monitoring_leader || '---';
         // `implementation_deadline` la string|null theo METADATA_SCHEMA.md (#11), khong
         // phai luon la so ngay — resolveDeadlineDate() xu ly moi dang hop le.
         const daysStr = resolveDeadlineDate(ai.implementation_deadline).displayText;
         const coUnits = ai.coordinating_units;
-        const notes = ai.notes || '---';
-        const docType = doc.category || ai.document_type || '';
 
-        let coUnitsPills = '<span class="rpa-meta-value">---</span>';
+        let coUnitsPills = '<span class="rpa-assign-value">---</span>';
         if (Array.isArray(coUnits)) {
             if (coUnits.length > 0) {
-                coUnitsPills = coUnits.map(u => `<span class="rpa-unit-pill">${u}</span>`).join(' ');
+                coUnitsPills = coUnits.map(u => `<span class="rpa-unit-pill">${escAttr(u)}</span>`).join(' ');
             }
         } else if (coUnits) {
             // docs/en/docflow.md muc 4 cam ket coordinating_units luon la mang (ke ca
@@ -212,7 +182,7 @@ export const updateDashboard = () => {
                 appendLog(`⚠ coordinating_units cua VB "${doc.signNumber || id}" khong phai mang (vi pham docflow.md muc 4, nhan duoc kieu ${typeof coUnits}): ${JSON.stringify(coUnits)}`);
                 doc._coUnitsContractWarned = true;
             }
-            coUnitsPills = `<span class="rpa-unit-pill">⚠ ${String(coUnits).trim()}</span>`;
+            coUnitsPills = `<span class="rpa-unit-pill">⚠ ${escAttr(String(coUnits).trim())}</span>`;
         }
 
         // `priority` KHONG nam trong 13 truong hop dong API (METADATA_SCHEMA.md muc
@@ -222,7 +192,6 @@ export const updateDashboard = () => {
         let priorityStr = 'Bình thường';
         if (pRaw === 1 || pRaw === '1') priorityStr = 'Khẩn';
         else if (pRaw === 2 || pRaw === '2') priorityStr = 'Thượng khẩn';
->>>>>>> d558f2d01e5c6e7ad1fc3792f48bca950be709ea
 
         // --- Build header badge chips ---
         const escSign = escAttr(signNumber);

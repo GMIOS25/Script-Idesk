@@ -107,7 +107,6 @@ export const findByVisibleText = (root, selector, texts) => {
     return null;
 };
 
-<<<<<<< HEAD
 /**
  * Loại bỏ hậu tố " - Tỉnh Gia Lai" khỏi tên cơ quan ban hành khi hiển thị.
  * Không thay đổi dữ liệu gốc.
@@ -118,8 +117,7 @@ export const stripAgencySuffix = (name) => {
     if (!name || name === '---') return name;
     return name.replace(/\s*-\s*Tỉnh\s+Gia\s+Lai\s*$/i, '').trim();
 };
-=======
-// utils/helpers.js
+
 export const toISODateOnly = (value) => {
     if (!value) return '';
     const s = String(value).trim();
@@ -128,4 +126,3 @@ export const toISODateOnly = (value) => {
     const d = new Date(s);
     return isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
 };
->>>>>>> d558f2d01e5c6e7ad1fc3792f48bca950be709ea

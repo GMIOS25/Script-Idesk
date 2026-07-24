@@ -363,6 +363,7 @@ def process_document():
     if request_data and isinstance(request_data, dict):
         metadata = request_data.get('metadata', {})
         file_url = request_data.get('file_url', '')
+        print(f"File URL Received: {file_url}")
     else:
         # Support fallback FormData if client sends legacy format
         metadata_str = request.form.get('metadata', '{}')
