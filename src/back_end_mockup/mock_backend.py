@@ -208,7 +208,7 @@ SAMPLE_RESPONSES = [
             "processing_unit": "Văn phòng xã",
             "monitoring_leader": "Chủ tịch UBND xã",
             "implementation_deadline": "trong 10 ngày làm việc",
-            "coordinating_units": ["Công an xã"],
+            "coordinating_units": ["Công an xã", "Phòng KT-HT", "Địa chính xã"],
             "notes": "Hồ sơ đất đai cá nhân"
         }
     },
@@ -244,7 +244,7 @@ SAMPLE_RESPONSES = [
             "processing_unit": "Văn phòng xã",
             "monitoring_leader": "Chủ tịch UBND xã",
             "implementation_deadline": "trong 05 ngày làm việc",
-            "coordinating_units": ["Công an xã"],
+            "coordinating_units": ["Công an xã", "Phòng VH XH"],
             "notes": "Cập nhật danh sách tư vấn viên"
         }
     },
@@ -262,7 +262,7 @@ SAMPLE_RESPONSES = [
             "processing_unit": "Trạm y tế Phù Mỹ Tây",
             "monitoring_leader": "Phó chủ tịch phụ phụ trách kinh tế",
             "implementation_deadline": "trong 10 ngày làm việc",
-            "coordinating_units": ["Phòng VH XH"],
+            "coordinating_units": ["Phòng VH XH", "Trung tâm HCC", "Trạm y tế Phù Mỹ Tây"],
             "notes": "Tuyên truyền BHYT toàn dân"
         }
     },
@@ -280,7 +280,7 @@ SAMPLE_RESPONSES = [
             "processing_unit": "Công an xã",
             "monitoring_leader": "Chủ tịch UBND xã",
             "implementation_deadline": "trong 03 ngày làm việc",
-            "coordinating_units": ["Văn phòng xã"],
+            "coordinating_units": ["Văn phòng xã", "Công an xã"],
             "notes": "Văn bản khẩn điện tử"
         }
     }
@@ -298,7 +298,7 @@ DEFAULT_DOC_DATA = {
     "processing_unit": "Phòng KT-HT",
     "monitoring_leader": "Chủ tịch UBND xã",
     "implementation_deadline": "trong 05 ngày làm việc",
-    "coordinating_units": ["Văn phòng xã"],
+    "coordinating_units": ["Văn phòng xã", "Phòng KT-HT"],
     "notes": "Phân tích mặc định từ AI Mock Backend"
 }
 
