@@ -1,7 +1,7 @@
 import { CONFIG } from '../config.js';
 import { state, setCachedAuthToken } from '../state.js';
 import { setStatus, appendLog } from '../utils/logger.js';
-import { getFallbackBasePath, sleep } from '../utils/helpers.js';
+import { getFallbackBasePath, sleep, toISODateOnly } from '../utils/helpers.js';
 import { selectAttachment } from '../utils/attachment.js';
 
 // Doc header tra ve tu GM_xmlhttpRequest la 1 chuoi tho "Key: Value\r\n..."
