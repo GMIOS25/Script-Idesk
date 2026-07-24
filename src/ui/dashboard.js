@@ -1,7 +1,11 @@
 import { docCache } from '../state.js';
 import { CSS_STYLES } from './styles.js';
 import { appendLog } from '../utils/logger.js';
+<<<<<<< HEAD
 import { formatDate, stripAgencySuffix } from '../utils/helpers.js';
+=======
+import { formatDate, resolveDeadlineDate } from '../utils/helpers.js';
+>>>>>>> d558f2d01e5c6e7ad1fc3792f48bca950be709ea
 import { on, emit } from '../core/bus.js';
 
 let logPanel = null;
@@ -151,6 +155,7 @@ export const updateDashboard = () => {
         const s = statusMap[doc.status] || statusMap.idle;
 
         const ai = doc.aiData || {};
+<<<<<<< HEAD
         const summary = ai.tom_tat || ai.summary || 'Chưa có tóm tắt AI...';
 
         // --- Metadata values ---
@@ -180,6 +185,44 @@ export const updateDashboard = () => {
         let priorityStr = '';
         if (pRaw === 1 || pRaw === '1' || pRaw === 'Khẩn' || pRaw === 'khan') priorityStr = 'Khẩn';
         else if (pRaw === 2 || pRaw === '2' || pRaw === 'Thượng khẩn' || pRaw === 'thuong_khan' || pRaw === 'Hỏa tốc') priorityStr = 'Thượng khẩn';
+=======
+        const summary = ai.summary || 'Chưa có tóm tắt AI...';
+        const bookInfo = doc.book
+            ? `Số ${doc.book.serialNumber || '---'}${doc.book.dateStr ? ' (' + formatDate(new Date(doc.book.dateStr)) + ')' : ''}`
+            : '---';
+        const mainUnit = ai.processing_unit || '---';
+        const leader = ai.monitoring_leader || '---';
+        // `implementation_deadline` la string|null theo METADATA_SCHEMA.md (#11), khong
+        // phai luon la so ngay — resolveDeadlineDate() xu ly moi dang hop le.
+        const daysStr = resolveDeadlineDate(ai.implementation_deadline).displayText;
+        const coUnits = ai.coordinating_units;
+        const notes = ai.notes || '---';
+        const docType = doc.category || ai.document_type || '';
+
+        let coUnitsPills = '<span class="rpa-meta-value">---</span>';
+        if (Array.isArray(coUnits)) {
+            if (coUnits.length > 0) {
+                coUnitsPills = coUnits.map(u => `<span class="rpa-unit-pill">${u}</span>`).join(' ');
+            }
+        } else if (coUnits) {
+            // docs/en/docflow.md muc 4 cam ket coordinating_units luon la mang (ke ca
+            // []), khong bao gio la string/null. Neu roi vao day tuc BE dang vi pham
+            // hop dong API — bao cho biet thay vi am tham "sua" du lieu nhu binh thuong.
+            if (!doc._coUnitsContractWarned) {
+                appendLog(`⚠ coordinating_units cua VB "${doc.signNumber || id}" khong phai mang (vi pham docflow.md muc 4, nhan duoc kieu ${typeof coUnits}): ${JSON.stringify(coUnits)}`);
+                doc._coUnitsContractWarned = true;
+            }
+            coUnitsPills = `<span class="rpa-unit-pill">⚠ ${String(coUnits).trim()}</span>`;
+        }
+
+        // `priority` KHONG nam trong 13 truong hop dong API (METADATA_SCHEMA.md muc
+        // 1). BE that se khong bao gio tra field nay nen tag nay se mac dinh "Binh
+        // thuong" tru khi dang goi mock/BE thu nghiem cu con tra `priority`.
+        const pRaw = ai.priority;
+        let priorityStr = 'Bình thường';
+        if (pRaw === 1 || pRaw === '1') priorityStr = 'Khẩn';
+        else if (pRaw === 2 || pRaw === '2') priorityStr = 'Thượng khẩn';
+>>>>>>> d558f2d01e5c6e7ad1fc3792f48bca950be709ea
 
         // --- Build header badge chips ---
         const escSign = escAttr(signNumber);

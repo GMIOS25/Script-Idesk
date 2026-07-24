@@ -1,5 +1,5 @@
 import { CONFIG, S } from '../config.js';
-import { sleep, calcDeadline, findByVisibleText } from '../utils/helpers.js';
+import { sleep, resolveDeadlineDate, findByVisibleText } from '../utils/helpers.js';
 import { appendLog } from '../utils/logger.js';
 import { selectTreeItem } from './treeSelect.js';
 
@@ -42,13 +42,13 @@ export const autoFillAndSubmit = async (docId, aiData) => {
         throw new Error('Khong thay form "Thong tin xu ly" (kiem tra lai S.TRANSFER_CONTAINER cho giao dien Chu tich)');
     }
 
-    const mainUnit = aiData.don_vi_xu_ly || aiData.processing_unit;
+    const mainUnit = aiData.processing_unit;
     if (mainUnit) {
         appendLog(`Xu ly chinh: ${mainUnit}`);
         await selectTreeItem(S.RESPONSIBLE_LINK, S.RESPONSIBLE_WRAP, mainUnit);
     }
 
-    const subUnits = aiData.don_vi_phoi_hop || aiData.coordinating_units;
+    const subUnits = aiData.coordinating_units;
     if (subUnits && Array.isArray(subUnits)) {
         for (const unit of subUnits) {
             if (unit && unit.trim()) {
@@ -58,35 +58,44 @@ export const autoFillAndSubmit = async (docId, aiData) => {
         }
     }
 
-    const days = aiData.thoi_han_thuc_hien || aiData.implementation_deadline;
-    if (days) {
-        const daysNum = parseInt(days);
-        const deadlineDate = calcDeadline(daysNum);
-
+    // `implementation_deadline` theo docs/en/METADATA_SCHEMA.md (#11) la string | null
+    // (ISO date hoac cau tuong doi da chuan hoa), khong phai luon la so ngay. Ham
+    // resolveDeadlineDate() xu ly ca 2 dang do, cong voi so nguyen de tuong thich
+    // nguoc voi mock/BE cu.
+    const deadlineInfo = resolveDeadlineDate(aiData.implementation_deadline);
+    if (deadlineInfo.daysNum !== null) {
         const numInput = document.querySelector(S.DEADLINE_NUMBER);
         if (numInput) {
-            numInput.value = daysNum;
+            numInput.value = deadlineInfo.daysNum;
             numInput.dispatchEvent(new Event('input', { bubbles: true }));
             numInput.dispatchEvent(new Event('change', { bubbles: true }));
         }
-
+    }
+    if (deadlineInfo.dateStr) {
         const dateInput = document.querySelector(S.DEADLINE_INPUT);
         if (dateInput) {
-            dateInput.value = deadlineDate;
+            dateInput.value = deadlineInfo.dateStr;
             dateInput.dispatchEvent(new Event('input', { bubbles: true }));
             dateInput.dispatchEvent(new Event('change', { bubbles: true }));
             dateInput.dispatchEvent(new Event('blur', { bubbles: true }));
-            appendLog(`Han xu ly: ${deadlineDate} (+${daysNum} ngay)`);
+            appendLog(`Han xu ly: ${deadlineInfo.dateStr}${deadlineInfo.daysNum !== null ? ` (+${deadlineInfo.daysNum} ngay)` : ' (tu chuoi AI tra ve)'}`);
         }
+    } else if (deadlineInfo.unparsed) {
+        appendLog(`Khong tu dong xac dinh duoc han xu ly tu AI: "${deadlineInfo.raw}" — vui long nhap tay tren form`);
     }
 
+    // `priority` KHONG nam trong 13 truong hop dong API (docs/en/METADATA_SCHEMA.md
+    // muc 1). BE that dung schema `extra="forbid"` se khong bao gio tra field nay —
+    // gia tri chi ton tai khi goi mock/BE thu nghiem cu. Giu lai o day nhu mot phan
+    // mo rong tuy chon, KHONG coi day la nguon xac dinh do khan chinh thuc; neu can
+    // tinh nang nay chinh thuc, phai bo sung `priority` vao METADATA_SCHEMA.md truoc.
     const prioritySelect = document.querySelector(S.PRIORITY_SELECT);
     if (prioritySelect) {
         let pVal = '0';
-        const pRaw = (aiData.priority !== undefined && aiData.priority !== null) ? aiData.priority : aiData.do_khan;
+        const pRaw = aiData.priority;
         if (pRaw !== undefined && pRaw !== null) {
-            if (pRaw === 1 || pRaw === '1' || pRaw === 'Khẩn' || pRaw === 'khan') pVal = '1';
-            else if (pRaw === 2 || pRaw === '2' || pRaw === 'Thượng khẩn' || pRaw === 'thuong_khan' || pRaw === 'Hỏa tốc') pVal = '2';
+            if (pRaw === 1 || pRaw === '1') pVal = '1';
+            else if (pRaw === 2 || pRaw === '2') pVal = '2';
             else pVal = String(pRaw);
         }
         prioritySelect.value = pVal;
@@ -97,7 +106,7 @@ export const autoFillAndSubmit = async (docId, aiData) => {
 
     const contentTextarea = document.querySelector(S.CONTENT_TEXTAREA);
     if (contentTextarea) {
-        const contentVal = aiData.notes || aiData.ghi_chu || aiData.content || aiData.summary || aiData.tom_tat || '';
+        const contentVal = aiData.notes || aiData.summary || '';
         contentTextarea.value = contentVal;
         contentTextarea.dispatchEvent(new Event('input', { bubbles: true }));
         contentTextarea.dispatchEvent(new Event('change', { bubbles: true }));
