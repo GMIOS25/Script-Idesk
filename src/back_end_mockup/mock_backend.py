@@ -381,7 +381,7 @@ def process_document():
             file_url = f"file://{save_path}"
 
     print("\nMetadata Received:")
-    print(json.dumps(metadata, indent=2, ensure_ascii=False))
+    print(json.dumps(metadata, indent=2))
 
     validation_error = _validate_identity_metadata(metadata)
     if validation_error:
@@ -389,6 +389,9 @@ def process_document():
 
     if not file_url or len(file_url) > 2048:
         return _error_response('INVALID_PROCESS_PAYLOAD', 'file_url thieu hoac vuot qua 2048 ky tu', 422)
+
+    if '127.0.0.1' in file_url or 'localhost' in file_url:
+        return _error_response('INVALID_FILE_URL', 'file_url phai la URL PDF cong khai hop le', 422)
 
     global _active_jobs
     with _active_jobs_lock:
@@ -431,7 +434,7 @@ def process_document():
         }
 
         print("\nResponse Payload:")
-        print(json.dumps(response_payload, indent=2, ensure_ascii=False))
+        print(json.dumps(response_payload, indent=2))
         print("=" * 60)
 
         return jsonify(response_payload), 200
@@ -547,10 +550,10 @@ def health_ready():
 
 if __name__ == '__main__':
     print("""
-╔══════════════════════════════════════════════════════╗
-║     DocFlow AI Mock Backend v3.1 (Flask)            ║
-║     Running on http://localhost:5000                 ║
-║     Endpoint: POST /documents/process                ║
-╚══════════════════════════════════════════════════════╝
++------------------------------------------------------+
+|     DocFlow AI Mock Backend v3.1 (Flask)             |
+|     Running on http://localhost:5000                 |
+|     Endpoint: POST /documents/process                |
++------------------------------------------------------+
     """)
     app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)

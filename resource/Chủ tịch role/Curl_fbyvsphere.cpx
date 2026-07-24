@@ -1,0 +1,17 @@
+curl ^"https://vpdt.gialai.gov.vn/cumvinhthanh/smartcloud/comm/nodes/fbyvsphere.cpx^" ^
+  -H ^"accept: */*^" ^
+  -H ^"accept-language: vi-VN,vi;q=0.9,fr-FR;q=0.8,fr;q=0.7,en-US;q=0.6,en;q=0.5,ja;q=0.4^" ^
+  -H ^"content-type: application/x-www-form-urlencoded; charset=UTF-8^" ^
+  -b ^"JSESSIONID=loc.136~p7MYNa0wFKQpGq5NDsmObka9XGM3QtSZulXg1Rps.cum-vinhthanh; sl-session=vkwlBTMMZGrSj+q9Vn4a9g==^" ^
+  -H ^"origin: https://vpdt.gialai.gov.vn^" ^
+  -H ^"priority: u=1, i^" ^
+  -H ^"referer: https://vpdt.gialai.gov.vn/cumvinhthanh/smartcloud/idesk6/page/paperwork/index.cpx^" ^
+  -H ^"sec-ch-ua: ^\^"Not;A=Brand^\^";v=^\^"8^\^", ^\^"Chromium^\^";v=^\^"150^\^", ^\^"Google Chrome^\^";v=^\^"150^\^"^" ^
+  -H ^"sec-ch-ua-mobile: ?0^" ^
+  -H ^"sec-ch-ua-platform: ^\^"Windows^\^"^" ^
+  -H ^"sec-fetch-dest: empty^" ^
+  -H ^"sec-fetch-mode: cors^" ^
+  -H ^"sec-fetch-site: same-origin^" ^
+  -H ^"user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36^" ^
+  -H ^"x-requested-with: XMLHttpRequest^" ^
+  --data-raw ^"exeacode=b3c5c53e-0146-1000-f790-0050568737c9^&type=transfer^&responsibility=main^"

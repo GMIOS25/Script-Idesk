@@ -8,3 +8,6 @@ src/idesk_automation.user.js
 
 # Thư mục tạm/legacy, không phải một phần của source chính thức.
 temppararell/
+
+#Thư mục test api
+bruno/  
