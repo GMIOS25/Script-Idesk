@@ -3,6 +3,7 @@ import { CSS_STYLES } from './styles.js';
 import { appendLog } from '../utils/logger.js';
 import { stripAgencySuffix, resolveDeadlineDate } from '../utils/helpers.js';
 import { on, emit } from '../core/bus.js';
+import './unitPicker.js'; // side-effect: đăng ký lắng nghe 'unit-picker-requested'
 
 let logPanel = null;
 
@@ -64,6 +65,26 @@ export const createDashboard = () => {
         const allCb = document.getElementById('rpa-check-all');
         allCb.checked = !allCb.checked;
         allCb.dispatchEvent(new Event('change'));
+    });
+
+    // Delegation cho nút "×" (xoá) và "+" (mở dropdown chọn) trên chip đơn vị xử lý
+    // chính/phối hợp. Gắn 1 lần duy nhất vì #rpa-card-feed không bị thay thế, chỉ
+    // innerHTML con của nó đổi mỗi lần updateDashboard().
+    document.getElementById('rpa-card-feed').addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-action]');
+        if (!btn) return;
+        const id = btn.getAttribute('data-id');
+        const action = btn.getAttribute('data-action');
+
+        if (action === 'remove-main') {
+            emit('unit-remove-requested', { id, kind: 'main' });
+        } else if (action === 'remove-co') {
+            emit('unit-remove-requested', { id, kind: 'co', value: btn.getAttribute('data-value') });
+        } else if (action === 'add-main') {
+            emit('unit-picker-requested', { id, kind: 'main', anchor: btn });
+        } else if (action === 'add-co') {
+            emit('unit-picker-requested', { id, kind: 'co', anchor: btn });
+        }
     });
 
     on('docs-changed', updateDashboard);
@@ -162,18 +183,33 @@ export const updateDashboard = () => {
         const docDate = doc.docDateStr || '';
 
         // --- Assignment ---
-        const mainUnit = ai.processing_unit || '---';
+        const mainUnit = ai.processing_unit || null;
         const leader = ai.monitoring_leader || '---';
         // `implementation_deadline` la string|null theo METADATA_SCHEMA.md (#11), khong
         // phai luon la so ngay — resolveDeadlineDate() xu ly moi dang hop le.
         const daysStr = resolveDeadlineDate(ai.implementation_deadline).displayText;
         const coUnits = ai.coordinating_units;
 
-        let coUnitsPills = '<span class="rpa-assign-value">---</span>';
+        // Đơn vị xử lý chính: chỉ được chọn 1. Có giá trị -> hiện chip + nút "×"
+        // (không kèm nút "+"); trống -> chỉ hiện chip "+" để chọn.
+        const mainUnitHtml = mainUnit
+            ? `<span class="rpa-unit-pill" title="${escAttr(mainUnit)}">
+                   <span class="rpa-unit-pill-text">${escAttr(mainUnit)}</span>
+                   <button type="button" class="rpa-unit-remove" data-action="remove-main" data-id="${id}" aria-label="Xoá">×</button>
+               </span>`
+            : `<button type="button" class="rpa-unit-pill rpa-unit-add" data-action="add-main" data-id="${id}">+ Thêm</button>`;
+
+        // Đơn vị phối hợp: chọn nhiều, luôn hiện chip "+" ở cuối để thêm nếu thiếu.
+        const addCoBtn = `<button type="button" class="rpa-unit-pill rpa-unit-add" data-action="add-co" data-id="${id}">+ Thêm</button>`;
+        const coChip = (value) => `
+            <span class="rpa-unit-pill" title="${escAttr(value)}">
+                <span class="rpa-unit-pill-text">${escAttr(value)}</span>
+                <button type="button" class="rpa-unit-remove" data-action="remove-co" data-id="${id}" data-value="${escAttr(value)}" aria-label="Xoá">×</button>
+            </span>`;
+
+        let coUnitsPills;
         if (Array.isArray(coUnits)) {
-            if (coUnits.length > 0) {
-                coUnitsPills = coUnits.map(u => `<span class="rpa-unit-pill">${escAttr(u)}</span>`).join(' ');
-            }
+            coUnitsPills = coUnits.map(coChip).join('') + addCoBtn;
         } else if (coUnits) {
             // docs/en/docflow.md muc 4 cam ket coordinating_units luon la mang (ke ca
             // []), khong bao gio la string/null. Neu roi vao day tuc BE dang vi pham
@@ -182,7 +218,9 @@ export const updateDashboard = () => {
                 appendLog(`⚠ coordinating_units cua VB "${doc.signNumber || id}" khong phai mang (vi pham docflow.md muc 4, nhan duoc kieu ${typeof coUnits}): ${JSON.stringify(coUnits)}`);
                 doc._coUnitsContractWarned = true;
             }
-            coUnitsPills = `<span class="rpa-unit-pill">⚠ ${escAttr(String(coUnits).trim())}</span>`;
+            coUnitsPills = coChip(`⚠ ${String(coUnits).trim()}`) + addCoBtn;
+        } else {
+            coUnitsPills = addCoBtn;
         }
 
         // `priority` KHONG nam trong 13 truong hop dong API (METADATA_SCHEMA.md muc
@@ -239,7 +277,7 @@ export const updateDashboard = () => {
                     <div class="rpa-assignment-grid">
                         <div class="rpa-assign-item">
                             <span class="rpa-assign-label">Đơn vị xử lý chính</span>
-                            <span class="rpa-assign-value is-main-unit" title="${escAttr(mainUnit)}">${mainUnit}</span>
+                            <div class="rpa-unit-tags">${mainUnitHtml}</div>
                         </div>
                         <div class="rpa-assign-item">
                             <span class="rpa-assign-label">Đơn vị phối hợp</span>

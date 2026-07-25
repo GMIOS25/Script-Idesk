@@ -367,12 +367,127 @@ export const CSS_STYLES = `
         gap: 4px !important;
     }
     .rpa-unit-pill {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 5px !important;
         background: #242427 !important;
         border: 1px solid #333338 !important;
         color: #D4D4D8 !important;
-        padding: 1px 7px !important;
+        padding: 2px 4px 2px 8px !important;
         border-radius: 4px !important;
         font-size: 11px !important;
+        max-width: 100% !important;
+    }
+    .rpa-unit-pill-text {
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+        max-width: 220px !important;
+    }
+    .rpa-unit-remove {
+        background: transparent !important;
+        border: none !important;
+        color: #71717A !important;
+        cursor: pointer !important;
+        font-size: 14px !important;
+        line-height: 1 !important;
+        padding: 0 3px !important;
+        border-radius: 3px !important;
+        font-family: inherit !important;
+    }
+    .rpa-unit-remove:hover { color: #FFFFFF !important; background: #3A3A3E !important; }
+
+    /* Chip "+ Thêm": dashed border, dùng chung cho ô xử lý chính (khi trống) và
+       ô phối hợp (luôn hiện ở cuối danh sách). */
+    .rpa-unit-pill.rpa-unit-add {
+        background: transparent !important;
+        border: 1px dashed #3A3A3E !important;
+        color: #8A8A90 !important;
+        cursor: pointer !important;
+        padding: 2px 9px !important;
+        font-family: inherit !important;
+    }
+    .rpa-unit-pill.rpa-unit-add:hover {
+        border-color: #6A6A70 !important;
+        color: #EAEAEA !important;
+        background: #1D1D20 !important;
+    }
+
+    /* ===== UNIT PICKER (dropdown chọn đơn vị/người từ fbyvsphere.cpx) ===== */
+    .rpa-unit-picker {
+        position: fixed !important;
+        z-index: 1000001 !important;
+        max-height: 320px !important;
+        background: #18181B !important;
+        border: 1px solid #333338 !important;
+        border-radius: 6px !important;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45) !important;
+        display: flex !important;
+        flex-direction: column !important;
+        font-family: 'SF Pro Display', 'Geist Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+        font-size: 12px !important;
+        color: #EAEAEA !important;
+        overflow: hidden !important;
+    }
+    .rpa-unit-picker-search-wrap {
+        display: flex !important;
+        align-items: center !important;
+        gap: 6px !important;
+        padding: 8px !important;
+        border-bottom: 1px solid #28282B !important;
+        flex-shrink: 0 !important;
+    }
+    .rpa-unit-picker-search {
+        flex: 1 !important;
+        background: #111113 !important;
+        border: 1px solid #2E2E32 !important;
+        color: #EAEAEA !important;
+        border-radius: 4px !important;
+        padding: 5px 8px !important;
+        font-size: 12px !important;
+        outline: none !important;
+        font-family: inherit !important;
+    }
+    .rpa-unit-picker-search:focus { border-color: #5A5A60 !important; }
+    .rpa-unit-picker-search-icon { color: #71717A !important; flex-shrink: 0 !important; }
+
+    .rpa-unit-picker-list {
+        overflow-y: auto !important;
+        padding: 4px 0 !important;
+    }
+    .rpa-unit-picker-list::-webkit-scrollbar { width: 6px !important; }
+    .rpa-unit-picker-list::-webkit-scrollbar-thumb { background: #2E2E32 !important; border-radius: 3px !important; }
+
+    .rpa-unit-picker-empty {
+        padding: 16px 10px !important;
+        color: #71717A !important;
+        text-align: center !important;
+        font-size: 12px !important;
+    }
+    .rpa-unit-picker-row {
+        display: flex !important;
+        align-items: center !important;
+        gap: 4px !important;
+        padding: 5px 10px 5px 0 !important;
+        cursor: pointer !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+    .rpa-unit-picker-row:hover { background: #26262A !important; }
+    .rpa-unit-picker-row.is-branch .rpa-unit-picker-label { color: #F4F4F5 !important; font-weight: 600 !important; }
+    .rpa-unit-picker-caret {
+        display: inline-flex !important;
+        width: 14px !important;
+        flex-shrink: 0 !important;
+        justify-content: center !important;
+        color: #71717A !important;
+        font-size: 10px !important;
+    }
+    .rpa-unit-picker-label {
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
     }
 
     /* ===== LOG PANEL ===== */

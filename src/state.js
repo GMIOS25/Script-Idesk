@@ -5,10 +5,12 @@ export const state = {
     isProcessing: false,
     basePath: '',      // vd: "/cumvinhthanh/smartcloud"
     execAcode: '',     // receiverAcode của người đăng nhập
-    cachedAuthToken: ''
+    cachedAuthToken: '',
+    unitsPrimed: false // true khi đã lấy được cây đơn vị (fbyvsphere.cpx) cho phiên hiện tại
 };
 
 export const setProcessing = (val) => { state.isProcessing = val; };
 export const setBasePath = (path) => { state.basePath = path; };
 export const setExecAcode = (code) => { state.execAcode = code; };
 export const setCachedAuthToken = (token) => { state.cachedAuthToken = token; };
+export const setUnitsPrimed = (val) => { state.unitsPrimed = val; };

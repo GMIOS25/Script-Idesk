@@ -5,6 +5,7 @@ import { sleep } from '../utils/helpers.js';
 import { ensureDocDetails } from '../services/api.js';
 import { callAIBackend, lookupDocument } from '../services/ai.js';
 import { autoFillAndSubmit } from '../automation/formFiller.js';
+import { primeUnitTreeDirect } from '../automation/unitPrimer.js';
 import { scanList } from '../services/scanner.js';
 import { on, emit } from '../core/bus.js';
 
@@ -38,6 +39,12 @@ export const scanAndSendAll = async () => {
 
         try {
             const fullDoc = await ensureDocDetails(id);
+
+            // Chỉ cần chạy 1 lần cho cả phiên: khi văn bản đầu tiên được mở, hệ thống
+            // đã tự có exeacode (qua view.cpx) để lấy cây đơn vị của đúng xã đang
+            // đăng nhập, phục vụ phần chỉnh sửa "Đơn vị xử lý"/"Đơn vị phối hợp".
+            if (!state.unitsPrimed) await primeUnitTreeDirect();
+
             if (!fullDoc.attachments || fullDoc.attachments.length === 0) {
                 throw new Error('Van ban khong co file dinh kem');
             }
@@ -122,6 +129,40 @@ export const runFillOnAll = async () => {
 export const updateProgress = (current, total) => {
     emit('progress', { current, total });
 };
+
+// Người dùng bấm "×" trên 1 chip đơn vị xử lý chính/phối hợp để xoá khỏi kết quả
+// AI đang review (chỉ sửa dữ liệu trong bộ nhớ, không đụng gì tới hệ thống thật).
+on('unit-remove-requested', ({ id, kind, value }) => {
+    const doc = docCache.get(id);
+    if (!doc || !doc.aiData) return;
+
+    if (kind === 'main') {
+        doc.aiData.processing_unit = null;
+    } else {
+        // Nếu coordinating_units không phải mảng (vi phạm docflow.md mục 4), coi thao
+        // tác xoá như "reset về rỗng" thay vì cố lọc theo giá trị.
+        const arr = Array.isArray(doc.aiData.coordinating_units) ? doc.aiData.coordinating_units : [];
+        doc.aiData.coordinating_units = arr.filter(u => u !== value);
+    }
+    emit('docs-changed');
+});
+
+// Người dùng chọn xong 1 đơn vị/người trong dropdown (unitPicker) — ghi nhận vào
+// aiData của văn bản tương ứng. Đơn vị xử lý chính chỉ 1 giá trị (thay thế), đơn
+// vị phối hợp cho phép nhiều giá trị (thêm vào, không trùng lặp).
+on('unit-add-confirmed', ({ id, kind, label }) => {
+    const doc = docCache.get(id);
+    if (!doc) return;
+    doc.aiData = doc.aiData || {};
+
+    if (kind === 'main') {
+        doc.aiData.processing_unit = label;
+    } else {
+        doc.aiData.coordinating_units = Array.isArray(doc.aiData.coordinating_units) ? doc.aiData.coordinating_units : [];
+        if (!doc.aiData.coordinating_units.includes(label)) doc.aiData.coordinating_units.push(label);
+    }
+    emit('docs-changed');
+});
 
 // Logic tự đăng ký lắng nghe thao tác của người dùng trên UI, thay vì UI import thẳng
 // hàm của controller. Nhờ đó ui/dashboard.js và controllers/mainController.js không
