@@ -133,7 +133,7 @@ export const callAIBackend = async (doc) => {
     }
 
     const bp = state.basePath || getFallbackBasePath();
-    const fileUrl = window.location.origin + `${bp}/docx/download.cpx?docID=${targetAttach.contentUid}&view=pdf`;
+    const fileUrl = window.location.origin + `${bp}/docx/download.cpx?docID=${targetAttach.contentUid}&amp;view=pdf`;
     const token = await getAuthToken();
 
     const payload = {
