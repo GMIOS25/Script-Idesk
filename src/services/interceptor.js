@@ -1,5 +1,5 @@
 import { ensureBasePath } from '../utils/helpers.js';
-import { handleListResponse, handleViewResponse, handleUnitsResponse } from './api.js';
+import { handleListResponse, handleViewResponse, handleUnitsResponse, captureExecAcodeFromUrl } from './api.js';
 
 export const interceptXHR = () => {
     const XHR = XMLHttpRequest.prototype;
@@ -18,6 +18,9 @@ export const interceptXHR = () => {
                 if (url.includes('qsprocess.cpx') || url.includes('view.cpx') || url.includes('fbyvsphere.cpx')) {
                     ensureBasePath(url);
                 }
+                if (url.includes('view.cpx')) {
+                    captureExecAcodeFromUrl(url);
+                }
                 if (url.includes('qsprocess.cpx')) {
                     handleListResponse(JSON.parse(this.responseText));
                 } else if (url.includes('view.cpx') && url.includes('exeacode=')) {
@@ -35,6 +38,9 @@ export const interceptFetch = () => {
     const origFetch = unsafeWindow.fetch.bind(unsafeWindow);
     unsafeWindow.fetch = function(input, init) {
         const url = typeof input === 'string' ? input : (input.url || '');
+        if (url.includes('view.cpx')) {
+            captureExecAcodeFromUrl(url);
+        }
         return origFetch(input, init).then(async (response) => {
             if (url.includes('qsprocess.cpx') || url.includes('view.cpx') || url.includes('fbyvsphere.cpx')) {
                 ensureBasePath(url);
