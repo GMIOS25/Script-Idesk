@@ -28,6 +28,7 @@ import re
 import json
 import time
 import uuid
+import random
 import threading
 from collections import defaultdict, deque
 
@@ -134,10 +135,115 @@ def _validate_identity_metadata(metadata):
 
 
 # ----------------------------------------------------
+# 1b. Du lieu don vi/nguoi mau — trich tu resource/"Chu tich role"/fbyvsphere.cpx
+#     (cay don vi that cua xa Vinh Thanh) de gia lap dung dinh dang the hien
+#     tren "tag" ma FE dung khi chon "processing_unit" / "coordinating_units"
+#     trong cay to chuc (xem selectTreeItem trong src/automation/treeSelect.js
+#     va autoFillAndSubmit trong src/automation/formFiller.js).
+#
+#     Quy tac hien thi tren tag (theo yeu cau QA):
+#       - type "dept" hoac "unit"  -> hien thi dung gia tri `name`
+#       - type "alias"             -> hien thi "name (refFullname)"
+#         (alias la "vi tri/chuc danh" gan voi 1 nguoi cu the — nhieu alias
+#         co cung `name` vd "Van thu" nen bat buoc phai kem refFullname de
+#         phan biet, giong nhu hien thi that tren giao dien iDesk)
+# ----------------------------------------------------
+ORG_SAMPLE_ELEMENTS = {
+    # -- type: dept (don vi/phong ban) --
+    "congan_xa":          {"id": 71446,   "name": "Công an xã", "type": "dept"},
+    "vanphong_ubnd_hdnd": {"id": 280,     "name": "Văn phòng UBND và HĐND", "type": "dept"},
+    "tram_yte":           {"id": 1920094, "name": "Trạm y tế", "type": "dept"},
+    "phong_vhxh":         {"id": 289,     "name": "Phòng Văn hóa - Xã hội", "type": "dept"},
+    "phong_kt":           {"id": 286,     "name": "Phòng Kinh tế - Xã Vĩnh Thạnh - Tỉnh Gia Lai", "type": "dept"},
+    "trungtam_hcc":       {"id": 283,     "name": "Trung tâm phục vụ Hành chính công", "type": "dept"},
+
+    # -- type: unit (don vi cap tren/cay goc) --
+    "ubnd_xa": {"id": 276, "name": "UBND Xã Vĩnh Thạnh - Tỉnh Gia Lai", "type": "unit"},
+
+    # -- type: alias (chuc danh gan voi 1 nguoi cu the) --
+    "chu_tich":       {"id": 279,   "name": "Chủ tịch UBND", "refFullname": "Lê Minh Thông", "type": "alias"},
+    "pho_chu_tich_1": {"id": 375,   "name": "Phó Chủ tịch UBND", "refFullname": "Nguyễn Quốc Trường", "type": "alias"},
+    "pho_chu_tich_2": {"id": 376,   "name": "Phó Chủ tịch UBND", "refFullname": "Trịnh Bảo Luân", "type": "alias"},
+    "van_thu_congan": {"id": 71447, "name": "Văn thư", "refFullname": "Văn thư Công an xã", "type": "alias"},
+    "van_thu_kt":     {"id": 287,   "name": "Văn thư", "refFullname": "Văn thư phòng Kinh tế", "type": "alias"},
+    "van_thu_hcc":    {"id": 284,   "name": "Văn thư", "refFullname": "Văn thư Trung tâm phục vụ Hành chính công", "type": "alias"},
+
+    # them nhieu alias da dang hon (cung ten "Chuyen vien" nhung khac nguoi,
+    # cac chuc danh Truong/Pho phong ban...) de kiem tra format alias tren
+    # nhieu tinh huong ngau nhien hon, khong chi lap lai vai gia tri co dinh.
+    "chuyen_vien_vhxh_1": {"id": 8475,    "name": "Chuyên viên", "refFullname": "Nguyễn Quốc Khánh", "type": "alias"},
+    "chuyen_vien_vhxh_2": {"id": 3887910, "name": "Chuyên viên", "refFullname": "Đinh Giang Sơn", "type": "alias"},
+    "chuyen_vien_kt_1":   {"id": 131941,  "name": "Chuyên viên", "refFullname": "Trần Quốc Huy", "type": "alias"},
+    "chuyen_vien_kt_2":   {"id": 1901,    "name": "Chuyên viên", "refFullname": "Đặng Thị Kim Oanh", "type": "alias"},
+    "chuyen_vien_vp_1":   {"id": 385,     "name": "Chuyên viên", "refFullname": "Lê Kim Anh", "type": "alias"},
+    "chuyen_vien_vp_2":   {"id": 386,     "name": "Chuyên viên", "refFullname": "Lê Minh Phong", "type": "alias"},
+    "chanh_van_phong":    {"id": 388,     "name": "Chánh Văn phòng", "refFullname": "Võ Trọng Duy", "type": "alias"},
+    "pho_chanh_van_phong": {"id": 8500,   "name": "Phó Chánh Văn phòng", "refFullname": "Lê Thị Lệ", "type": "alias"},
+    "truong_phong_kt":    {"id": 423,     "name": "Trưởng phòng Kinh tế", "refFullname": "Nguyễn Tuấn Trình", "type": "alias"},
+    "truong_ban_kt_ns":   {"id": 37714,   "name": "Trưởng Ban Kinh tế - Ngân Sách", "refFullname": "Đinh Khánh", "type": "alias"},
+    "truong_ban_vhxh":    {"id": 37886,   "name": "Trưởng Ban Văn hóa - Xã hội", "refFullname": "Đinh Tiêu", "type": "alias"},
+    "truong_congan_xa":   {"id": 329981,  "name": "Trưởng Công an xã", "refFullname": "Đinh Văn Ngoan", "type": "alias"},
+    "chi_huy_truong":     {"id": 38060,   "name": "Chỉ huy trưởng", "refFullname": "Trần Thanh Đức", "type": "alias"},
+    "truong_tram_yte":    {"id": 1921184, "name": "Trưởng trạm", "refFullname": "Nguyễn Văn Tám", "type": "alias"},
+    "giam_doc_hcc":       {"id": 8422,    "name": "Giám đốc", "refFullname": "Lê Hàn Sinh", "type": "alias"},
+    "pho_giam_doc_hcc":   {"id": 8408,    "name": "Phó giám đốc", "refFullname": "Nguyễn Văn Bình", "type": "alias"},
+}
+
+_DEPT_KEYS = [k for k, v in ORG_SAMPLE_ELEMENTS.items() if v["type"] == "dept"]
+_UNIT_KEYS = [k for k, v in ORG_SAMPLE_ELEMENTS.items() if v["type"] == "unit"]
+_ALIAS_KEYS = [k for k, v in ORG_SAMPLE_ELEMENTS.items() if v["type"] == "alias"]
+_ALL_KEYS = _DEPT_KEYS + _UNIT_KEYS + _ALIAS_KEYS
+
+
+def _random_processing_and_coordinating_units():
+    """Sinh ngau nhien 1 cap (processing_unit, coordinating_units) tu
+    ORG_SAMPLE_ELEMENTS moi lan goi, tron ca 3 loai dept/unit/alias — dung cho
+    cac van ban KHONG khop mau nao trong SAMPLE_RESPONSES (truoc day luon tra
+    ve dung 1 gia tri mac dinh co dinh nen khong the kiem tra duoc nhieu bien
+    the cua tag "alias").
+    """
+    processing_key = random.choice(_ALL_KEYS)
+    processing_unit = _org_tag_label(processing_key)
+
+    # Uu tien co it nhat 1 alias trong coordinating_units de dam bao luon co
+    # tinh huong kiem tra dinh dang "name (refFullname)".
+    pool = [k for k in _ALL_KEYS if k != processing_key]
+    alias_pool = [k for k in pool if k in _ALIAS_KEYS]
+
+    n_coordinating = random.randint(2, 3)
+    picks = []
+    if alias_pool:
+        picks.append(random.choice(alias_pool))
+    remaining_needed = n_coordinating - len(picks)
+    rest_pool = [k for k in pool if k not in picks]
+    if remaining_needed > 0 and rest_pool:
+        picks.extend(random.sample(rest_pool, min(remaining_needed, len(rest_pool))))
+
+    random.shuffle(picks)
+    coordinating_units = [_org_tag_label(k) for k in picks]
+    return processing_unit, coordinating_units
+
+
+def _org_tag_label(key):
+    """Tra ve chuoi hien thi tren tag dung quy tac:
+    - dept/unit -> name
+    - alias     -> "name (refFullname)"
+    """
+    elem = ORG_SAMPLE_ELEMENTS[key]
+    if elem["type"] == "alias":
+        return f"{elem['name']} ({elem['refFullname']})"
+    return elem["name"]
+
+
+# ----------------------------------------------------
 # 2. Du lieu mau — dung 13 cot theo METADATA_SCHEMA.md v2.0
 #    Luu y `implementation_deadline` la string|null (khong phai so nguyen), va
 #    KHONG co truong `priority` (khong nam trong 13 cot cong khai — schema AI
 #    output dung extra="forbid" nen BE that se reject/khong bao gio tra field nay).
+#
+#    `processing_unit` va `coordinating_units` duoc gan bang _org_tag_label()
+#    tu ORG_SAMPLE_ELEMENTS o tren, phu du 3 to hop de QA/FE kiem tra viec
+#    dien tag: dept-only, dept+alias, va unit/alias.
 # ----------------------------------------------------
 SAMPLE_RESPONSES = [
     {
@@ -151,10 +257,10 @@ SAMPLE_RESPONSES = [
             "signer": "Nguyễn Văn A",
             "subject": "Trình tự, thủ tục, biểu mẫu thực hiện chính sách thu hút và ưu đãi bác sĩ, dược sĩ theo NQ 54/2026/NQ-HĐND",
             "summary": "Trình tự, thủ tục, biểu mẫu thực hiện chính sách thu hút và ưu đãi bác sĩ, dược sĩ theo NQ 54/2026/NQ-HĐND",
-            "processing_unit": "Trạm y tế Phù Mỹ Tây",
+            "processing_unit": _org_tag_label("tram_yte"),
             "monitoring_leader": "Chủ tịch UBND xã",
             "implementation_deadline": "trong 07 ngày làm việc",
-            "coordinating_units": ["Phòng VH XH", "Văn phòng xã"],
+            "coordinating_units": [_org_tag_label("phong_vhxh"), _org_tag_label("vanphong_ubnd_hdnd")],
             "notes": "Văn bản ưu đãi ngành Y tế - Ưu tiên xử lý"
         }
     },
@@ -169,10 +275,10 @@ SAMPLE_RESPONSES = [
             "signer": "Trần Văn B",
             "subject": "Phối hợp cung cấp số liệu về tỷ lệ nghèo đa chiều phục vụ xác định thôn vùng đồng bào DTTS",
             "summary": "Phối hợp cung cấp số liệu về tỷ lệ nghèo đa chiều phục vụ xác định thôn vùng đồng bào DTTS",
-            "processing_unit": "Phòng KT-HT",
+            "processing_unit": _org_tag_label("phong_kt"),
             "monitoring_leader": "Phó chủ tịch phụ trách kinh tế",
             "implementation_deadline": "trong 05 ngày làm việc",
-            "coordinating_units": ["Phòng VH XH", "Trung tâm HCC"],
+            "coordinating_units": [_org_tag_label("phong_vhxh"), _org_tag_label("trungtam_hcc")],
             "notes": "Yêu cầu số liệu trước ngày 25"
         }
     },
@@ -187,10 +293,10 @@ SAMPLE_RESPONSES = [
             "signer": "Lê Văn C",
             "subject": "Niêm yết công khai xác nhận nguồn gốc đất, thời điểm sử dụng đất và cấp GCN QSD đất lần đầu",
             "summary": "Niêm yết công khai xác nhận nguồn gốc đất, thời điểm sử dụng đất và cấp GCN QSD đất lần đầu",
-            "processing_unit": "Văn phòng xã",
+            "processing_unit": _org_tag_label("vanphong_ubnd_hdnd"),
             "monitoring_leader": "Chủ tịch UBND xã",
             "implementation_deadline": "trong 15 ngày",
-            "coordinating_units": ["Công an xã", "Phòng KT-HT"],
+            "coordinating_units": [_org_tag_label("congan_xa"), _org_tag_label("phong_kt")],
             "notes": "Niêm yết 15 ngày tại trụ sở"
         }
     },
@@ -205,10 +311,10 @@ SAMPLE_RESPONSES = [
             "signer": "Phạm Văn D",
             "subject": "Niêm yết công khai kết quả kiểm tra hồ sơ đăng ký của ông Nguyễn Văn Cang",
             "summary": "Niêm yết công khai kết quả kiểm tra hồ sơ đăng ký của ông Nguyễn Văn Cang",
-            "processing_unit": "Văn phòng xã",
+            "processing_unit": _org_tag_label("vanphong_ubnd_hdnd"),
             "monitoring_leader": "Chủ tịch UBND xã",
             "implementation_deadline": "trong 10 ngày làm việc",
-            "coordinating_units": ["Công an xã", "Phòng KT-HT", "Địa chính xã"],
+            "coordinating_units": [_org_tag_label("congan_xa"), _org_tag_label("phong_kt"), _org_tag_label("van_thu_congan")],
             "notes": "Hồ sơ đất đai cá nhân"
         }
     },
@@ -223,10 +329,10 @@ SAMPLE_RESPONSES = [
             "signer": "Hoàng Văn E",
             "subject": "Góp ý dự thảo Thông tư hướng dẫn xây dựng, khai thác học liệu số trong bồi dưỡng cán bộ",
             "summary": "Góp ý dự thảo Thông tư hướng dẫn xây dựng, khai thác học liệu số trong bồi dưỡng cán bộ",
-            "processing_unit": "Văn phòng HĐND xã",
+            "processing_unit": _org_tag_label("chu_tich"),
             "monitoring_leader": "Chủ tịch HĐND xã",
             "implementation_deadline": "trong 07 ngày làm việc",
-            "coordinating_units": ["Phòng VH XH", "Đoàn TNCS"],
+            "coordinating_units": [_org_tag_label("van_thu_kt"), _org_tag_label("pho_chu_tich_2")],
             "notes": "Gửi văn bản góp ý về Sở Nội vụ"
         }
     },
@@ -241,10 +347,10 @@ SAMPLE_RESPONSES = [
             "signer": "Vũ Văn F",
             "subject": "Phê duyệt danh sách tổ chức, cá nhân tham gia mạng lưới tư vấn viên pháp luật tỉnh Gia Lai",
             "summary": "Phê duyệt danh sách tổ chức, cá nhân tham gia mạng lưới tư vấn viên pháp luật tỉnh Gia Lai",
-            "processing_unit": "Văn phòng xã",
+            "processing_unit": _org_tag_label("ubnd_xa"),
             "monitoring_leader": "Chủ tịch UBND xã",
             "implementation_deadline": "trong 05 ngày làm việc",
-            "coordinating_units": ["Công an xã", "Phòng VH XH"],
+            "coordinating_units": [_org_tag_label("congan_xa"), _org_tag_label("phong_vhxh")],
             "notes": "Cập nhật danh sách tư vấn viên"
         }
     },
@@ -259,10 +365,10 @@ SAMPLE_RESPONSES = [
             "signer": "Đặng Văn G",
             "subject": "Triển khai Kế hoạch số 261/KH-UBND ngày 26/6/2026 về thực hiện BHYT toàn dân giai đoạn mới",
             "summary": "Triển khai Kế hoạch số 261/KH-UBND ngày 26/6/2026 về thực hiện BHYT toàn dân giai đoạn mới",
-            "processing_unit": "Trạm y tế Phù Mỹ Tây",
+            "processing_unit": _org_tag_label("tram_yte"),
             "monitoring_leader": "Phó chủ tịch phụ phụ trách kinh tế",
             "implementation_deadline": "trong 10 ngày làm việc",
-            "coordinating_units": ["Phòng VH XH", "Trung tâm HCC", "Trạm y tế Phù Mỹ Tây"],
+            "coordinating_units": [_org_tag_label("phong_vhxh"), _org_tag_label("trungtam_hcc"), _org_tag_label("van_thu_hcc")],
             "notes": "Tuyên truyền BHYT toàn dân"
         }
     },
@@ -277,10 +383,10 @@ SAMPLE_RESPONSES = [
             "signer": "Bùi Văn H",
             "subject": "Thông báo tiếp nhận văn bản hệ thống quản lý văn bản trên môi trường điện tử",
             "summary": "Thông báo tiếp nhận văn bản hệ thống quản lý văn bản trên môi trường điện tử",
-            "processing_unit": "Công an xã",
+            "processing_unit": _org_tag_label("pho_chu_tich_1"),
             "monitoring_leader": "Chủ tịch UBND xã",
             "implementation_deadline": "trong 03 ngày làm việc",
-            "coordinating_units": ["Văn phòng xã", "Công an xã"],
+            "coordinating_units": [_org_tag_label("vanphong_ubnd_hdnd"), _org_tag_label("chu_tich")],
             "notes": "Văn bản khẩn điện tử"
         }
     }
@@ -295,10 +401,10 @@ DEFAULT_DOC_DATA = {
     "signer": "Người ký",
     "subject": "Tự động phân tích văn bản đến",
     "summary": "Tự động phân tích văn bản đến từ hệ thống iDesk",
-    "processing_unit": "Phòng KT-HT",
+    "processing_unit": _org_tag_label("phong_kt"),
     "monitoring_leader": "Chủ tịch UBND xã",
     "implementation_deadline": "trong 05 ngày làm việc",
-    "coordinating_units": ["Văn phòng xã", "Phòng KT-HT"],
+    "coordinating_units": [_org_tag_label("vanphong_ubnd_hdnd"), _org_tag_label("phong_kt")],
     "notes": "Phân tích mặc định từ AI Mock Backend"
 }
 
@@ -416,7 +522,16 @@ def process_document():
             matched_data["document_number"] = doc_number or "999/VB-KXD"
             matched_data["subject"] = subject or "Văn bản chưa khớp mẫu"
             matched_data["summary"] = f"Tóm tắt tự động cho: {subject}" if subject else "Chờ xử lý"
-            print("\nNo exact pattern match, using default mock response")
+            # Van ban khong khop mau nao -> sinh ngau nhien processing_unit /
+            # coordinating_units (tron dept/unit/alias) thay vi luon tra dung
+            # 1 gia tri co dinh cua DEFAULT_DOC_DATA, de FE/QA co the kiem tra
+            # duoc nhieu bien the cua tag "alias" qua nhieu lan goi.
+            random_processing_unit, random_coordinating_units = _random_processing_and_coordinating_units()
+            matched_data["processing_unit"] = random_processing_unit
+            matched_data["coordinating_units"] = random_coordinating_units
+            print("\nNo exact pattern match, using randomized default mock response")
+            print(f"Random processing_unit: {random_processing_unit}")
+            print(f"Random coordinating_units: {random_coordinating_units}")
 
         # Update dynamic fields (FE authoritative — field 2-7 theo METADATA_SCHEMA.md)
         matched_data["document_number"] = doc_number or matched_data["document_number"]
