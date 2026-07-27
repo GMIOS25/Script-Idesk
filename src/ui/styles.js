@@ -97,18 +97,6 @@ export const CSS_STYLES = `
         border: 1px solid #242427 !important;
     }
 
-    .rpa-select-all-label {
-        display: inline-flex !important;
-        align-items: center !important;
-        gap: 6px !important;
-        font-size: 12px !important;
-        color: #A1A1AA !important;
-        cursor: pointer !important;
-        user-select: none !important;
-        margin-left: auto !important;
-    }
-    .rpa-select-all-label input { cursor: pointer !important; }
-
     .rpa-btn {
         background: #1A1A1A !important;
         border: 1px solid #333333 !important;

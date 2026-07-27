@@ -28,11 +28,6 @@ export const createDashboard = () => {
             <div class="rpa-toolbar">
                 <button class="rpa-btn rpa-btn-primary" id="rpa-btn-scan">Quét &amp; Gửi AI</button>
                 <button class="rpa-btn rpa-btn-purple" id="rpa-btn-fill-all">Tự động điền</button>
-                <label class="rpa-select-all-label">
-                    <input type="checkbox" id="rpa-check-all" checked>
-                    <span>Chọn tất cả</span>
-                </label>
-                <button class="rpa-btn rpa-btn-outline" id="rpa-btn-select-all">Đảo chọn</button>
             </div>
             <div class="rpa-feed-wrap">
                 <div class="rpa-card-feed" id="rpa-card-feed">
@@ -58,14 +53,6 @@ export const createDashboard = () => {
     document.getElementById('rpa-btn-toggle-log').addEventListener('click', () => logPanel.classList.toggle('open'));
     document.getElementById('rpa-btn-scan').addEventListener('click', () => emit('scan-requested'));
     document.getElementById('rpa-btn-fill-all').addEventListener('click', () => emit('fill-requested'));
-    document.getElementById('rpa-check-all').addEventListener('change', (e) => {
-        document.querySelectorAll('.rpa-row-check').forEach(cb => cb.checked = e.target.checked);
-    });
-    document.getElementById('rpa-btn-select-all').addEventListener('click', () => {
-        const allCb = document.getElementById('rpa-check-all');
-        allCb.checked = !allCb.checked;
-        allCb.dispatchEvent(new Event('change'));
-    });
 
     // Delegation cho nút "×" (xoá) và "+" (mở dropdown chọn) trên chip đơn vị xử lý
     // chính/phối hợp. Gắn 1 lần duy nhất vì #rpa-card-feed không bị thay thế, chỉ
