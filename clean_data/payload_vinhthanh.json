@@ -391,6 +391,30 @@
             "office": "N"
         },
         {
+            "id": 4006937,
+            "parent": 276,
+            "name": "Cụm thi đua khen thưởng",
+            "refCode": "817e7e61-0147-1000-f377-0050568737c9",
+            "type": "dept",
+            "order": 0,
+            "config": 4,
+            "defaultBook": "",
+            "office": "N"
+        },
+        {
+            "id": 4006938,
+            "parent": 4006937,
+            "name": "Văn thư",
+            "refCode": "817e7e61-0147-1000-f377-0050568737c9",
+            "refUname": "vanthuctd@vinhthanh.gialai.gov.vn",
+            "refFullname": "xã vĩnh thạnh",
+            "type": "alias",
+            "rank": "dept_administrator",
+            "order": 0,
+            "config": 0,
+            "office": "N"
+        },
+        {
             "id": 244522,
             "parent": 244521,
             "name": "Văn thư",
@@ -729,19 +753,6 @@
             "refCode": "b3c6c6cf-0146-1000-f9fa-0050568737c9",
             "refUname": "lenhmt@vinhthanh.gialai.gov.vn",
             "refFullname": "Mang Thành Lệnh",
-            "type": "alias",
-            "rank": "specialist",
-            "order": 0,
-            "config": 0,
-            "office": "N"
-        },
-        {
-            "id": 401,
-            "parent": 286,
-            "name": "Chuyên viên",
-            "refCode": "b3c6c631-0146-1000-e229-0050568737c9",
-            "refUname": "vudm@vinhthanh.gialai.gov.vn",
-            "refFullname": "Đặng Minh Vũ",
             "type": "alias",
             "rank": "specialist",
             "order": 0,
