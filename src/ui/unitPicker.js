@@ -2,8 +2,10 @@ import { unitCache } from '../state.js';
 import { on, emit } from '../core/bus.js';
 
 // Chuỗi hiển thị cho 1 phần tử: "unit"/"dept" hiện tên đơn vị/phòng ban, "alias"
-// hiện "{Chức danh} - {Người phụ trách}" (đúng định dạng trong bản thiết kế).
-const labelOf = (u) => (u.type === 'alias' && u.refFullname) ? `${u.name} - ${u.refFullname}` : u.name;
+// hiện "{Chức danh} ({Người phụ trách})" — đồng bộ với định dạng chip do backend
+// trả về (vd AI trả "Chỉ huy trưởng (Trần Thanh Đức)"), tránh lệch giá trị giữa
+// đơn vị do BE gán sẵn và đơn vị do user tự chọn qua picker.
+const labelOf = (u) => (u.type === 'alias' && u.refFullname) ? `${u.name} (${u.refFullname})` : u.name;
 
 /**
  * Dựng cây cha-con từ unitCache (Map phẳng id -> unit). Node nào có `parent`
