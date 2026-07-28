@@ -13,6 +13,8 @@
 //   - 'unit-remove-requested' : UI báo người dùng bấm "×" trên 1 chip đơn vị { id, kind: 'main'|'co', value? }
 //   - 'unit-picker-requested' : UI báo người dùng bấm "+" để thêm đơn vị { id, kind: 'main'|'co', anchor }
 //   - 'unit-add-confirmed'    : unitPicker báo người dùng đã chọn xong 1 đơn vị { id, kind: 'main'|'co', label }
+//   - 'deadline-editor-requested' : UI báo người dùng bấm vào "Hạn thực hiện" để sửa số ngày { id, anchor }
+//   - 'deadline-update-confirmed' : deadlineEditor báo người dùng đã lưu số ngày mới { id, days }
 // ==============================================================================
 
 const listeners = {};

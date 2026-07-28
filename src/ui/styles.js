@@ -349,6 +349,115 @@ export const CSS_STYLES = `
         font-weight: 500 !important;
     }
 
+    /* Nút "Hạn thực hiện" — bấm để mở popover chỉnh số ngày (chỉ tương tác con số). */
+    .rpa-deadline-btn {
+        display: inline-flex !important;
+        align-items: center !important;
+        align-self: flex-start !important;
+        gap: 5px !important;
+        background: transparent !important;
+        border: 1px solid transparent !important;
+        padding: 1px 4px !important;
+        margin: -1px -4px !important;
+        border-radius: 4px !important;
+        cursor: pointer !important;
+        font-family: 'Geist Mono', 'SF Mono', monospace !important;
+        color: #FFFFFF !important;
+        font-weight: 500 !important;
+        font-size: 12px !important;
+        width: fit-content !important;
+        max-width: 100% !important;
+        text-align: left !important;
+    }
+    .rpa-deadline-btn:hover {
+        background: #1D1D20 !important;
+        border-color: #3A3A3E !important;
+    }
+    .rpa-deadline-btn-text {
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+    }
+    .rpa-deadline-btn-icon {
+        flex-shrink: 0 !important;
+        color: #71717A !important;
+    }
+    .rpa-deadline-btn:hover .rpa-deadline-btn-icon { color: #EAEAEA !important; }
+
+    /* ===== DEADLINE EDITOR (popover chỉnh số ngày hạn thực hiện) ===== */
+    .rpa-deadline-editor {
+        position: fixed !important;
+        z-index: 1000001 !important;
+        background: #18181B !important;
+        border: 1px solid #333338 !important;
+        border-radius: 6px !important;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45) !important;
+        padding: 10px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 8px !important;
+        font-family: 'SF Pro Display', 'Geist Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+        color: #EAEAEA !important;
+    }
+    .rpa-deadline-editor-title {
+        font-size: 11px !important;
+        font-weight: 600 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.05em !important;
+        color: #71717A !important;
+    }
+    .rpa-deadline-editor-row {
+        display: flex !important;
+        align-items: center !important;
+        gap: 6px !important;
+    }
+    .rpa-deadline-step {
+        flex-shrink: 0 !important;
+        width: 28px !important;
+        height: 28px !important;
+        background: #1A1A1A !important;
+        border: 1px solid #333333 !important;
+        color: #EAEAEA !important;
+        border-radius: 4px !important;
+        font-size: 15px !important;
+        line-height: 1 !important;
+        cursor: pointer !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+    .rpa-deadline-step:hover { background: #262626 !important; color: #FFFFFF !important; }
+    .rpa-deadline-step:active { transform: scale(0.96) !important; }
+    .rpa-deadline-input {
+        flex: 1 !important;
+        min-width: 0 !important;
+        background: #111113 !important;
+        border: 1px solid #2E2E32 !important;
+        color: #EAEAEA !important;
+        border-radius: 4px !important;
+        padding: 5px 8px !important;
+        font-size: 13px !important;
+        font-family: 'Geist Mono', 'SF Mono', monospace !important;
+        text-align: center !important;
+        outline: none !important;
+    }
+    .rpa-deadline-input:focus { border-color: #5A5A60 !important; }
+    .rpa-deadline-editor-hint {
+        font-size: 10px !important;
+        color: #71717A !important;
+        text-align: center !important;
+    }
+    .rpa-deadline-editor-actions {
+        display: flex !important;
+        justify-content: flex-end !important;
+        gap: 6px !important;
+        margin-top: 2px !important;
+    }
+    .rpa-deadline-editor-actions .rpa-btn {
+        padding: 5px 12px !important;
+        font-size: 11px !important;
+    }
+
     .rpa-unit-tags {
         display: flex !important;
         flex-wrap: wrap !important;
