@@ -4,6 +4,7 @@ import { appendLog } from '../utils/logger.js';
 import { stripAgencySuffix, resolveDeadlineDate } from '../utils/helpers.js';
 import { on, emit } from '../core/bus.js';
 import './unitPicker.js'; // side-effect: đăng ký lắng nghe 'unit-picker-requested'
+import './deadlineEditor.js'; // side-effect: đăng ký lắng nghe 'deadline-editor-requested'
 
 let logPanel = null;
 
@@ -71,6 +72,8 @@ export const createDashboard = () => {
             emit('unit-picker-requested', { id, kind: 'main', anchor: btn });
         } else if (action === 'add-co') {
             emit('unit-picker-requested', { id, kind: 'co', anchor: btn });
+        } else if (action === 'edit-deadline') {
+            emit('deadline-editor-requested', { id, anchor: btn });
         }
     });
 
@@ -276,7 +279,13 @@ export const updateDashboard = () => {
                         </div>
                         <div class="rpa-assign-item">
                             <span class="rpa-assign-label">Hạn thực hiện</span>
-                            <span class="rpa-assign-value is-deadline">${daysStr}</span>
+                            <button type="button" class="rpa-deadline-btn" data-action="edit-deadline" data-id="${id}" title="Bấm để chỉnh số ngày hạn thực hiện">
+                                <span class="rpa-deadline-btn-text">${daysStr}</span>
+                                <svg class="rpa-deadline-btn-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M12 20h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </button>
                         </div>
                     </div>
                 </div>

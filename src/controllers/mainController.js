@@ -1,7 +1,7 @@
 import { CONFIG } from '../config.js';
 import { docCache, state, setProcessing } from '../state.js';
 import { setStatus, appendLog } from '../utils/logger.js';
-import { sleep } from '../utils/helpers.js';
+import { sleep, applyDeadlineDays } from '../utils/helpers.js';
 import { ensureDocDetails } from '../services/api.js';
 import { callAIBackend, lookupDocument } from '../services/ai.js';
 import { autoFillAndSubmit } from '../automation/formFiller.js';
@@ -161,6 +161,17 @@ on('unit-add-confirmed', ({ id, kind, label }) => {
         doc.aiData.coordinating_units = Array.isArray(doc.aiData.coordinating_units) ? doc.aiData.coordinating_units : [];
         if (!doc.aiData.coordinating_units.includes(label)) doc.aiData.coordinating_units.push(label);
     }
+    emit('docs-changed');
+});
+
+// Người dùng chỉnh số ngày hạn thực hiện qua popover (deadlineEditor) — chỉ số ngày
+// (01-100) được thay đổi, phần văn phong còn lại của AI (nếu có) được giữ nguyên
+// nhờ applyDeadlineDays().
+on('deadline-update-confirmed', ({ id, days }) => {
+    const doc = docCache.get(id);
+    if (!doc) return;
+    doc.aiData = doc.aiData || {};
+    doc.aiData.implementation_deadline = applyDeadlineDays(doc.aiData.implementation_deadline, days);
     emit('docs-changed');
 });
 

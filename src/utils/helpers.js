@@ -72,6 +72,39 @@ export const resolveDeadlineDate = (value) => {
     return result;
 };
 
+// Người dùng chỉnh "Hạn thực hiện" từ Card Feed: chỉ được sửa CON SỐ ngày (01-100),
+// không được gõ tự do vào phần mô tả. Hàm này áp số ngày mới vào `implementation_deadline`
+// gốc mà KHÔNG đổi văn phong câu chữ AI trả về:
+//  - Nếu gốc là chuỗi dạng "trong 05 ngày làm việc" -> chỉ thay phần chữ số "05" thành
+//    số mới, giữ nguyên phần còn lại của câu (kể cả cách đệm số 0 nếu gốc có đệm).
+//  - Nếu gốc là số (number), rỗng/null, ngày ISO tuyệt đối, hoặc mô tả không có số
+//    ngày cụ thể (vd "sau khi có hướng dẫn mới") -> không có mẫu câu "N ngày" sẵn để
+//    sửa tại chỗ, nên dựng lại theo đúng mẫu câu chuẩn AI hay trả về:
+//    "trong NN ngày làm việc" (hiển thị thống nhất dù đã gửi AI hay chưa).
+export const applyDeadlineDays = (rawValue, newDays) => {
+    const n = Math.round(Number(newDays));
+    const clamped = Math.min(100, Math.max(1, Number.isFinite(n) ? n : 1));
+    const standardTemplate = () => `trong ${String(clamped).padStart(2, '0')} ngày làm việc`;
+
+    if (typeof rawValue === 'string') {
+        const trimmed = rawValue.trim();
+        const relMatch = trimmed.match(RELATIVE_DAYS_RE);
+        if (relMatch) {
+            const digits = relMatch[1];
+            const paddedDays = (digits.length > 1 && digits.startsWith('0'))
+                ? String(clamped).padStart(digits.length, '0')
+                : String(clamped);
+            const before = trimmed.slice(0, relMatch.index);
+            const after = trimmed.slice(relMatch.index + relMatch[0].length);
+            const newSegment = relMatch[0].replace(digits, paddedDays);
+            return before + newSegment + after;
+        }
+        return standardTemplate();
+    }
+
+    return standardTemplate();
+};
+
 export const getVisibleItems = () => {
     let items = Array.from(document.querySelectorAll(S.LEFT_LIST));
     if (items.length === 0) items = Array.from(document.querySelectorAll(S.LEFT_LIST_FALLBACK));
