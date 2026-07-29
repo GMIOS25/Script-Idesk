@@ -15,7 +15,11 @@ export const CONFIG = {
         TREE_SEARCH: 500,
         CLOSE_TREE: 350,
         AFTER_SUBMIT: 1800,
-        BETWEEN_DOCS: 800
+        BETWEEN_DOCS: 800,
+        // Backend gioi han 30 request/60s cho moi endpoint (xem mock_backend.py
+        // RATE_LIMIT_MAX/RATE_LIMIT_WINDOW_SEC). 2200ms/van ban ~ 27 van ban/60s,
+        // du bien de tranh 429 khi scanAndSendAll xu ly nhieu van ban lien tiep.
+        BETWEEN_AI_CALLS: 2200
     }
 };
 

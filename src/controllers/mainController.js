@@ -75,6 +75,13 @@ export const scanAndSendAll = async () => {
         }
         emit('docs-changed');
         updateProgress(i + 1, total);
+
+        // Backend gioi han rate theo cua so truot (mock_backend.py: 30 request/60s
+        // cho tung endpoint). Khong co delay o day thi lo >30 van ban (vi du khi
+        // nguoi dung chuyen trang thu cong nhieu lan truoc khi bam Quet & Gui AI,
+        // khien nhieu trang cung "visible" va scanList() gom chung mot luc) se ban
+        // request lien tuc va dinh 429 tu van ban thu 31 tro di.
+        if (i < pendingIds.length - 1) await sleep(CONFIG.DELAY_MS.BETWEEN_AI_CALLS);
     }
 
     setProcessing(false);
