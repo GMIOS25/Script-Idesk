@@ -30,6 +30,7 @@ Hanh vi loi (docs/en/docflow.md muc 9-10):
     X-Mock-Force-Error: RATE_LIMITED | SERVER_BUSY | VALIDATION
 """
 
+import sys
 import os
 import re
 import json
@@ -40,10 +41,20 @@ import secrets
 import threading
 from collections import defaultdict, deque
 
+# Dam bao terminal log tieng Viet khong bi loi font/encoding tren Windows
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
+
 from flask import Flask, request, jsonify, g
 from flask_cors import CORS
 
 app = Flask(__name__)
+app.config['JSON_AS_ASCII'] = False
+if hasattr(app, 'json'):
+    app.json.ensure_ascii = False
+
 CORS(app, expose_headers=['X-Request-Id'])
 
 # ----------------------------------------------------
@@ -788,7 +799,7 @@ WARDS, ORGANIZATIONS_BY_ID = _load_ward_catalog()
 #    chay duoc ngay khong can cau hinh gi them.
 # ----------------------------------------------------
 VALID_CREDENTIALS = {
-    os.environ.get('MOCK_AUTH_USERNAME', 'fe-server'): os.environ.get('MOCK_AUTH_PASSWORD', 'secret_password'),
+    os.environ.get('MOCK_AUTH_USERNAME', 'fe-server-prod'): os.environ.get('MOCK_AUTH_PASSWORD', 'secret_password'),
 }
 
 
