@@ -185,23 +185,35 @@ PATCHABLE_FIELDS = {'summary', 'processing_unit', 'monitoring_leader', 'implemen
 
 def _validate_identity_metadata(metadata):
     """Dung chung cho POST /documents/process (key `metadata`) va POST
-    /documents/lookup (chinh body request) — ca hai deu doi hoi dung 6 truong
-    identity theo docs muc 4."""
+    /documents/lookup (chinh body request).
+
+    Doi lai theo hanh vi thuc te cua server that: khi cao du lieu bi thieu 1
+    vai truong trong 6 truong identity, server VAN CHAP NHAN request va xu ly
+    tiep voi cac truong con lai — truong nao thieu thi tra ve null, KHONG con
+    tra loi 422 nhu truoc day nua. Chi tra loi khi:
+      - metadata khong phai JSON object, HOAC
+      - metadata rong hoan toan (khong co truong nao ca -> khong the dinh
+        danh duoc van ban nay la van ban gi), HOAC
+      - mot truong DA DUOC GUI (khong rong) nhung sai kieu / qua dai / sai
+        dinh dang — day la loi du lieu that su, khac voi truong hop "thieu".
+    """
     if not isinstance(metadata, dict):
         return "metadata phai la mot JSON object"
 
-    missing = [f for f in REQUIRED_METADATA_FIELDS if not metadata.get(f)]
-    if missing:
-        return f"Thieu truong bat buoc: {', '.join(missing)}"
+    if not any(metadata.get(f) for f in REQUIRED_METADATA_FIELDS):
+        return f"Metadata rong hoan toan, can it nhat 1 trong cac truong: {', '.join(REQUIRED_METADATA_FIELDS)}"
 
     for f in REQUIRED_METADATA_FIELDS:
         val = metadata.get(f)
+        if not val:
+            continue  # thieu truong nay -> chap nhan, se tra ve null cho FE
         if not isinstance(val, str):
             return f"Truong '{f}' phai la string"
         if len(val) > 500:
             return f"Truong '{f}' vuot qua 500 ky tu"
 
-    if not DATE_RE.match(metadata.get('document_date', '')):
+    document_date = metadata.get('document_date')
+    if document_date and not DATE_RE.match(document_date):
         return "document_date phai theo dinh dang YYYY-MM-DD"
 
     return None
@@ -494,6 +506,21 @@ def _find_sample_by_stt(stt):
     return None
 
 
+IDENTITY_FIELDS = ('document_number', 'document_type', 'issuing_agency', 'document_date', 'signer', 'subject')
+
+
+def _find_cached_by_identity(metadata):
+    """Nhanh CACHE cua POST /documents/process (docs/en/docflowv2.md muc 9):
+    tra dung 6 truong dinh danh, KHONG dong den file_url. Van ban da tung
+    duoc xu ly (nam trong PROCESSED_DOCS) voi CUNG 6 truong nay -> tra ve
+    ban ghi cu ngay, khong goi AI lai."""
+    wanted = tuple(metadata.get(k) for k in IDENTITY_FIELDS)
+    for data in PROCESSED_DOCS.values():
+        if tuple(data.get(k) for k in IDENTITY_FIELDS) == wanted:
+            return data.copy()
+    return None
+
+
 # ----------------------------------------------------
 # 2b. POST /files/presign, PUT /files/upload/<token>, GET /files/tmp/<token>
 #     (docs/en/docflowv2.md muc 2 nhanh (b), muc 6-8) — mo phong storage tam de
@@ -754,7 +781,17 @@ WARDS, ORGANIZATIONS_BY_ID = _load_ward_catalog()
 
 # ----------------------------------------------------
 # 3. POST /auth/token
+#    Danh sach tai khoan dich vu hop le (docs/en/docflowv2.md muc 5: sai
+#    tai khoan/mat khau -> 401 INVALID_CREDENTIALS). Co the override qua
+#    bien moi truong MOCK_AUTH_USERNAME/MOCK_AUTH_PASSWORD; mac dinh khop
+#    voi bruno/environments/Local.bru (fe-server / secret_password) de FE
+#    chay duoc ngay khong can cau hinh gi them.
 # ----------------------------------------------------
+VALID_CREDENTIALS = {
+    os.environ.get('MOCK_AUTH_USERNAME', 'fe-server'): os.environ.get('MOCK_AUTH_PASSWORD', 'secret_password'),
+}
+
+
 @app.route('/auth/token', methods=['POST'])
 def auth_token():
     forced = _forced_error()
@@ -768,6 +805,14 @@ def auth_token():
     password = payload.get('password', '')
 
     print(f"[AUTH] Request token for user: '{username}'")
+
+    expected_password = VALID_CREDENTIALS.get(username)
+    if expected_password is None or not secrets.compare_digest(password, expected_password):
+        return _error_response(
+            'INVALID_CREDENTIALS',
+            'Sai ten tai khoan hoac mat khau',
+            401
+        )
 
     token = _issue_token()
     return jsonify({
@@ -827,6 +872,18 @@ def process_document():
     if not file_url or len(file_url) > 2048:
         return _error_response('INVALID_PROCESS_PAYLOAD', 'file_url thieu hoac vuot qua 2048 ky tu', 422)
 
+    # Nhanh CACHE (docs muc 9): tra dung 6 truong dinh danh TRUOC, KHONG kiem
+    # file_url (khong SSRF-check, khong doi hoi token tmp con song). Van ban
+    # da xu ly truoc do -> tra ngay ket qua cu, khong goi AI, khong tang
+    # _active_jobs, khong dong den tmp storage.
+    cached = _find_cached_by_identity(metadata)
+    if cached is not None:
+        response_payload = {"source": "cache", "data": cached}
+        print("\nCache hit theo 6 truong dinh danh - tra ngay, khong goi AI")
+        print(json.dumps(response_payload, indent=2, ensure_ascii=False))
+        print("=" * 60)
+        return jsonify(response_payload), 200
+
     # file_url tro ve chinh storage tam cua server nay (tra ve tu POST
     # /files/presign) thi doc thang tu bo nho theo token, KHONG bi chan boi luat
     # cam localhost o duoi — dung nhu ghi chu docs/en/docflowv2.md muc 8:
@@ -879,13 +936,15 @@ def process_document():
             print(f"Random processing_unit: {random_processing_unit}")
             print(f"Random coordinating_units: {random_coordinating_units}")
 
-        # Update dynamic fields (FE authoritative — field 2-7 theo METADATA_SCHEMA.md)
-        matched_data["document_number"] = doc_number or matched_data["document_number"]
-        matched_data["document_type"] = metadata.get('document_type') or matched_data["document_type"]
-        matched_data["issuing_agency"] = metadata.get('issuing_agency') or matched_data["issuing_agency"]
-        matched_data["document_date"] = metadata.get('document_date') or matched_data["document_date"]
-        matched_data["signer"] = metadata.get('signer') or matched_data["signer"]
-        matched_data["subject"] = subject or matched_data["subject"]
+        # Update dynamic fields (FE authoritative — field 2-7 theo METADATA_SCHEMA.md).
+        # FE co the cao thieu 1 vai truong (xem _validate_identity_metadata da noi
+        # long o tren): truong nao FE KHONG gui (rong/None) thi tra ve dung null,
+        # KHONG con tu dien gia tri mau/doan tu matched_data nua — vi day la cac
+        # truong FE-authoritative, tu dien vao se tao cam giac sai la "da co du
+        # lieu" trong khi thuc ra van con thieu.
+        for _identity_field in REQUIRED_METADATA_FIELDS:
+            _val = metadata.get(_identity_field)
+            matched_data[_identity_field] = _val if _val else None
 
         PROCESSED_DOCS[matched_data["stt"]] = matched_data.copy()
 
@@ -964,12 +1023,12 @@ def patch_document(stt):
 
     patch_body = request.get_json(silent=True)
     if not isinstance(patch_body, dict) or not patch_body:
-        return _error_response('INVALID_PATCH_PAYLOAD', 'Body phai la JSON object va co it nhat 1 truong', 422)
+        return _error_response('INVALID_UPDATE_PAYLOAD', 'Body phai la JSON object va co it nhat 1 truong', 422)
 
     unknown_fields = [k for k in patch_body.keys() if k not in PATCHABLE_FIELDS]
     if unknown_fields:
         return _error_response(
-            'INVALID_PATCH_PAYLOAD',
+            'INVALID_UPDATE_PAYLOAD',
             f"Chi nhan cac truong {sorted(PATCHABLE_FIELDS)}, nhan duoc truong khong hop le: {', '.join(unknown_fields)}",
             422
         )
