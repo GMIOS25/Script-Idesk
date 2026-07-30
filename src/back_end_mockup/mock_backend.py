@@ -13,6 +13,10 @@ Endpoints ho tro:
 - POST /api/process-doc         : Legacy endpoint (backward compatibility)
 - POST /documents/lookup        : Tra metadata van ban khong can file URL
 - PATCH /documents/<stt>        : Cap nhat 6 truong thong tin AI
+- GET  /wards                    : Danh sach xa trong danh muc to chuc (muc 12.1)
+- GET  /wards/compare            : So sanh cac xa theo comparison_code (muc 12.2)
+- GET  /wards/<ward_code>/organizations    : Don vi cua 1 xa (muc 12.3)
+- GET  /organizations/<id>/entries         : Chuc danh/dau moi cua 1 don vi (muc 12.4)
 - GET  /health                  : Check Liveness
 - GET  /health/ready            : Check Readiness
 
@@ -104,6 +108,71 @@ def _assign_request_id():
 def _attach_request_id(response):
     response.headers['X-Request-Id'] = getattr(g, 'request_id', uuid.uuid4().hex)
     return response
+
+
+# ----------------------------------------------------
+# 0b. Bearer auth (docs/en/docflowv2.md muc 1): moi endpoint TRU /auth/token,
+#     /health, /health/ready deu doi hoi header:
+#         Authorization: Bearer <access_token>
+#     Truoc ban nay, mock hoan toan khong xac thuc token (_client_key chi dung
+#     no lam key rate-limit) -> khac hanh vi server that (xem
+#     docs/en/api_host.md, Request 3: goi /documents/lookup thieu token phai
+#     tra 401 UNAUTHORIZED). Token phat ra tu /auth/token duoc luu tam trong
+#     bo nho (khong persist qua restart, du cho muc dich mock) kem TTL 24h
+#     dung nhu `expires_in` da cong bo o muc 5.
+# ----------------------------------------------------
+AUTH_EXEMPT_ENDPOINTS = {'auth_token', 'health', 'health_ready'}
+BEARER_RE = re.compile(r'^Bearer\s+(.+)$', re.IGNORECASE)
+TOKEN_TTL_SEC = 86400
+
+_issued_tokens_lock = threading.Lock()
+_issued_tokens = {}  # token -> epoch expiry (time.time())
+
+
+def _issue_token():
+    token = f"mock_bearer_token_{uuid.uuid4().hex[:16]}"
+    with _issued_tokens_lock:
+        _issued_tokens[token] = time.time() + TOKEN_TTL_SEC
+    return token
+
+
+def _is_token_valid(token):
+    with _issued_tokens_lock:
+        expires_at = _issued_tokens.get(token)
+        if expires_at is None:
+            return False
+        if expires_at < time.time():
+            del _issued_tokens[token]
+            return False
+        return True
+
+
+@app.before_request
+def _enforce_bearer_auth():
+    # Preflight CORS khong kem Authorization -> luon cho qua.
+    if request.method == 'OPTIONS':
+        return None
+    # Route khong khop endpoint nao (vd 404) -> de Flask xu ly binh thuong,
+    # khong che bang 401 truoc khi kip bao 404.
+    if request.endpoint is None or request.endpoint in AUTH_EXEMPT_ENDPOINTS:
+        return None
+
+    match = BEARER_RE.match(request.headers.get('Authorization', ''))
+    if not match:
+        return _error_response(
+            'UNAUTHORIZED',
+            'Thieu hoac sai dinh dang header Authorization: Bearer <access_token>',
+            401
+        )
+
+    if not _is_token_valid(match.group(1).strip()):
+        return _error_response(
+            'UNAUTHORIZED',
+            'Token khong hop le hoac da het han, goi lai POST /auth/token',
+            401
+        )
+
+    return None
 
 
 # ----------------------------------------------------
@@ -557,6 +626,133 @@ def files_tmp(token):
 
 
 # ----------------------------------------------------
+# 2c. Danh muc co cau to chuc (Ward -> Organization -> Entry) - docs/en/docflowv2.md
+#     muc 12: 4 endpoint /wards, /wards/compare, /wards/{ward_code}/organizations,
+#     /organizations/{organization_id}/entries. Doc lap tu 2 file du lieu THAT da
+#     co san trong repo (clean_data/payload_vinhthanh.json, payload_phumy.json -
+#     cay to chuc dinh dang unit/dept/alias, xem clean_data/generate_inserts.py)
+#     thay vi hard-code lai bang tay, de tranh sai lech voi du lieu goc. Doc lap
+#     1 lan luc import module, KHONG phu thuoc request nao.
+# ----------------------------------------------------
+_CLEAN_DATA_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    'clean_data'
+)
+
+WARD_SOURCE_FILES = [
+    ("VINH_THANH", "payload_vinhthanh.json"),
+    ("PHU_MY_TAY", "payload_phumy.json"),
+]
+
+# comparison_code duoc gan theo tu khoa trong ten don vi (muc 12.2: "Nhom theo
+# comparison_code, KHONG so theo name - ten don vi giua cac xa khac cach viet
+# (vd 'Van phong UBND va HDND' vs 'Van phong HDND va UBND') nen khop theo ten
+# se sai"). Danh sach luat tu cu the -> chung, dung chung cho ca 2 xa.
+_COMPARISON_CODE_RULES = [
+    (('quân sự',), 'MILITARY_COMMAND'),
+    (('công an',), 'COMMUNE_POLICE'),
+    (('y tế',), 'HEALTH_STATION'),
+    (('kinh tế',), 'ECONOMIC_DEPARTMENT'),
+    (('thông tin', 'thể thao'), 'CULTURE_INFO_SPORTS_CENTER'),
+    (('văn hóa', 'xã hội'), 'CULTURE_SOCIAL_DEPARTMENT'),
+    (('hành chính công',), 'PUBLIC_ADMIN_CENTER'),
+    (('lãnh đạo',), 'COMMITTEE_LEADERSHIP'),
+    (('hội đồng nhân dân',), 'PEOPLE_COUNCIL'),
+    (('trường',), 'SCHOOL'),
+    (('bầu cử',), 'ELECTION_COMMITTEE'),
+    (('thi đua',), 'EMULATION_COMMENDATION_CLUSTER'),
+    (('ban quản lý',), 'MANAGEMENT_BOARD'),
+    (('quản trị',), 'SYSTEM_ADMIN'),
+]
+
+
+def _classify_comparison_code(dept_name):
+    n = (dept_name or '').lower()
+    # Kiem "Van phong UBND/HDND" truoc tien vi ten nay chua ca tu "HDND" (de
+    # nham voi PEOPLE_COUNCIL) lan cac tu khoa khac trong danh sach chung.
+    if 'văn phòng' in n and ('ubnd' in n or 'hđnd' in n):
+        return 'OFFICE_PC_PC'
+    for keywords, code in _COMPARISON_CODE_RULES:
+        if all(kw in n for kw in keywords):
+            return code
+    # Fallback an toan cho ten chua tung gap trong du lieu mau: sinh code on
+    # dinh tu chinh ten thay vi loi, de danh muc moi van hien thi duoc.
+    slug = re.sub(r'[^0-9a-zA-Z]+', '_', dept_name.strip()).strip('_').upper()
+    return slug or 'OTHER'
+
+
+def _load_ward_catalog():
+    """Doc cay to chuc that (unit/dept/alias) cua tung xa tu clean_data/*.json
+    va dung thanh Ward -> Organization -> Entry. Neu thieu file (vd moi truong
+    deploy khong dong kem thu muc clean_data/), tra ve danh muc rong thay vi
+    lam sap ca mock backend (/wards se tra data: [] thay vi loi 500 luc import).
+    """
+    wards = {}
+    organizations_by_id = {}
+    org_seq = 1
+    entry_seq = 1
+
+    for ward_code, filename in WARD_SOURCE_FILES:
+        path = os.path.join(_CLEAN_DATA_DIR, filename)
+        try:
+            with open(path, encoding='utf-8') as f:
+                elements = json.load(f).get('elements', [])
+        except (OSError, ValueError):
+            elements = []
+
+        units = [e for e in elements if e.get('type') == 'unit']
+        depts = [e for e in elements if e.get('type') == 'dept']
+        aliases = [e for e in elements if e.get('type') == 'alias']
+
+        # Tat ca dept trong 1 file deu co chung `parent` = id cua unit goc
+        # (chinh xa do); cac unit cap tren (huyen/tinh) khong nam trong file.
+        root_parent_id = depts[0].get('parent') if depts else None
+        root_unit = next((u for u in units if u['id'] == root_parent_id), None)
+        ward_name = root_unit['name'] if root_unit else ward_code
+
+        organizations = []
+        for dept in depts:
+            dept_entries = []
+            for alias in aliases:
+                if alias.get('parent') != dept['id']:
+                    continue
+                dept_entries.append({
+                    "id": entry_seq,
+                    "source_id": alias['id'],
+                    "position_name": alias.get('name', ''),
+                    "ref_uname": alias.get('refUname', ''),
+                    "ref_fullname": alias.get('refFullname', ''),
+                    "rank": alias.get('rank', ''),
+                    "sort_order": alias.get('order', 0),
+                })
+                entry_seq += 1
+
+            org = {
+                "id": org_seq,
+                "source_id": dept['id'],
+                "name": dept.get('name', ''),
+                "comparison_code": _classify_comparison_code(dept.get('name', '')),
+                "sort_order": dept.get('order', 0),
+                "entries": dept_entries,
+            }
+            organizations.append(org)
+            organizations_by_id[org_seq] = org
+            org_seq += 1
+
+        wards[ward_code] = {
+            "id": len(wards) + 1,
+            "code": ward_code,
+            "name": ward_name,
+            "organizations": organizations,
+        }
+
+    return wards, organizations_by_id
+
+
+WARDS, ORGANIZATIONS_BY_ID = _load_ward_catalog()
+
+
+# ----------------------------------------------------
 # 3. POST /auth/token
 # ----------------------------------------------------
 @app.route('/auth/token', methods=['POST'])
@@ -573,7 +769,7 @@ def auth_token():
 
     print(f"[AUTH] Request token for user: '{username}'")
 
-    token = f"mock_bearer_token_{uuid.uuid4().hex[:16]}"
+    token = _issue_token()
     return jsonify({
         "access_token": token,
         "token_type": "bearer",
@@ -796,7 +992,134 @@ def patch_document(stt):
     return jsonify({"data": updated}), 200
 
 # ----------------------------------------------------
-# 7. GET /health & GET /health/ready
+# 7. GET /wards, /wards/compare, /wards/<ward_code>/organizations,
+#    GET /organizations/<organization_id>/entries (docs/en/docflowv2.md muc 12)
+#    Doc du lieu tu WARDS/ORGANIZATIONS_BY_ID (muc 2c o tren) — doc lap
+#    luc import module, DOC LAP voi luong /documents/* ben tren, goi luc nao
+#    cung duoc dung nhu ghi chu o dau file docs/en/docflowv2.md.
+# ----------------------------------------------------
+@app.route('/wards', methods=['GET'])
+def list_wards():
+    forced = _forced_error()
+    if forced:
+        return forced
+    if not _check_rate_limit(_client_key('wards')):
+        return _error_response('RATE_LIMITED', 'Qua tan suat cho phep, vui long thu lai sau', 429)
+
+    data = [{
+        "id": ward["id"],
+        "code": ward["code"],
+        "name": ward["name"],
+        "organization_count": len(ward["organizations"]),
+        "entry_count": sum(len(org["entries"]) for org in ward["organizations"]),
+    } for ward in WARDS.values()]
+
+    return jsonify({"data": data}), 200
+
+
+@app.route('/wards/compare', methods=['GET'])
+def compare_wards():
+    forced = _forced_error()
+    if forced:
+        return forced
+    if not _check_rate_limit(_client_key('wards_compare')):
+        return _error_response('RATE_LIMITED', 'Qua tan suat cho phep, vui long thu lai sau', 429)
+
+    # ?ward_code=A&ward_code=B (lap lai duoc, xem muc 12.2). Bo trong = so tat
+    # ca xa. Loai trung neu FE lo gui trung ma xa.
+    requested = request.args.getlist('ward_code')
+    ward_codes = list(dict.fromkeys(requested)) if requested else list(WARDS.keys())
+
+    unknown = [c for c in ward_codes if c not in WARDS]
+    if unknown:
+        return _error_response(
+            'WARD_NOT_FOUND',
+            f"Khong tim thay ma xa: {', '.join(unknown)}",
+            404
+        )
+
+    # Thu thap comparison_code theo dung thu tu xuat hien dau tien trong cac
+    # xa duoc chon, dam bao MOI xa duoc chon deu co mat trong tung nhom (ke ca
+    # voi o 0/0) dung yeu cau "xa khong co don vi nao trong nhom van xuat hien".
+    comparison_codes = []
+    seen = set()
+    for code in ward_codes:
+        for org in WARDS[code]["organizations"]:
+            if org["comparison_code"] not in seen:
+                seen.add(org["comparison_code"])
+                comparison_codes.append(org["comparison_code"])
+
+    data = []
+    for comp_code in comparison_codes:
+        wards_field = {}
+        for code in ward_codes:
+            matched = [o for o in WARDS[code]["organizations"] if o["comparison_code"] == comp_code]
+            wards_field[code] = {
+                "organization_count": len(matched),
+                "entry_count": sum(len(o["entries"]) for o in matched),
+            }
+        data.append({"comparison_code": comp_code, "wards": wards_field})
+
+    return jsonify({"ward_codes": ward_codes, "data": data}), 200
+
+
+@app.route('/wards/<ward_code>/organizations', methods=['GET'])
+def ward_organizations(ward_code):
+    forced = _forced_error()
+    if forced:
+        return forced
+    if not _check_rate_limit(_client_key('ward_orgs')):
+        return _error_response('RATE_LIMITED', 'Qua tan suat cho phep, vui long thu lai sau', 429)
+
+    ward = WARDS.get(ward_code)
+    if ward is None:
+        return _error_response('WARD_NOT_FOUND', f"Khong tim thay ma xa '{ward_code}'", 404)
+
+    # Sap theo (sort_order, source_id) - luon dung ca 2 khoa vi sort_order mot
+    # minh khong tat dinh (co xa toan bo sort_order = 0, xem muc 12.3).
+    ordered = sorted(ward["organizations"], key=lambda o: (o["sort_order"], o["source_id"]))
+    data = [{
+        "id": o["id"],
+        "source_id": o["source_id"],
+        "name": o["name"],
+        "comparison_code": o["comparison_code"],
+        "sort_order": o["sort_order"],
+        "entry_count": len(o["entries"]),
+    } for o in ordered]
+
+    return jsonify({"ward_code": ward_code, "data": data}), 200
+
+
+@app.route('/organizations/<int:organization_id>/entries', methods=['GET'])
+def organization_entries(organization_id):
+    forced = _forced_error()
+    if forced:
+        return forced
+    if not _check_rate_limit(_client_key('org_entries')):
+        return _error_response('RATE_LIMITED', 'Qua tan suat cho phep, vui long thu lai sau', 429)
+
+    org = ORGANIZATIONS_BY_ID.get(organization_id)
+    if org is None:
+        return _error_response('ORGANIZATION_NOT_FOUND', f"Khong tim thay don vi co id={organization_id}", 404)
+
+    # Cung ap dung (sort_order, source_id) nhu muc 12.3 de dam bao thu tu tat
+    # dinh — doc khong noi ro thu tu cho 12.4 nen dung nhat quan voi 12.3.
+    ordered = sorted(org["entries"], key=lambda e: (e["sort_order"], e["source_id"]))
+    data = [{
+        "id": e["id"],
+        "source_id": e["source_id"],
+        "position_name": e["position_name"],
+        "ref_uname": e["ref_uname"],
+        "ref_fullname": e["ref_fullname"],
+        "rank": e["rank"],
+        "sort_order": e["sort_order"],
+    } for e in ordered]
+
+    return jsonify({"organization_id": organization_id, "data": data}), 200
+
+
+# ----------------------------------------------------
+# 8. GET /health & GET /health/ready
 # ----------------------------------------------------
 @app.route('/health', methods=['GET'])
 def health():
