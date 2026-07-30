@@ -5,6 +5,9 @@ docs/en/METADATA_SCHEMA.md (NGUON SU THAT DUY NHAT ve schema).
 
 Endpoints ho tro:
 - POST /auth/token              : Lay access token
+- POST /files/presign            : Xin URL tam de day file len (docs/en/docflowv2.md muc 6)
+- PUT  /files/upload/<token>     : Day bytes tho cua file (docs/en/docflowv2.md muc 7)
+- GET  /files/tmp/<token>        : Tai lai file tam (docs/en/docflowv2.md muc 8)
 - POST /documents/process       : Tra cache hoac xu ly van ban (Endpoint chinh)
 - POST /api/v1/documents/process: Alias cho /documents/process
 - POST /api/process-doc         : Legacy endpoint (backward compatibility)
@@ -29,6 +32,7 @@ import json
 import time
 import uuid
 import random
+import secrets
 import threading
 from collections import defaultdict, deque
 
@@ -422,6 +426,137 @@ def _find_sample_by_stt(stt):
 
 
 # ----------------------------------------------------
+# 2b. POST /files/presign, PUT /files/upload/<token>, GET /files/tmp/<token>
+#     (docs/en/docflowv2.md muc 2 nhanh (b), muc 6-8) — mo phong storage tam de
+#     FE day file that len truoc khi goi /documents/process, thay the viec gui
+#     thang link noi bo iDesk (yeu cau cookie phien dang nhap cua nguoi dung,
+#     xem docs/changes/De_xuat_presigned_url.md).
+# ----------------------------------------------------
+ALLOWED_UPLOAD_CONTENT_TYPES = {
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'text/plain',
+}
+
+PRESIGN_TTL_SEC = int(os.environ.get('MOCK_PRESIGN_TTL_SEC', '600'))       # 10 phut (muc 6-7)
+MAX_UPLOAD_FILE_BYTES = 25 * 1024 * 1024                                    # 25 MB (muc 7)
+MAX_TMP_STORAGE_BYTES = int(os.environ.get('MOCK_MAX_TMP_STORAGE_MB', '200')) * 1024 * 1024  # kho tam 200 MB
+
+# Nhan dien file_url tro ve chinh storage tam cua server nay (khac voi 1 URL
+# cong khai that su ben ngoai) de /documents/process doc thang tu bo nho theo
+# token thay vi that su di fetch qua HTTP (dung nhu ghi chu o muc 8).
+TMP_URL_RE = re.compile(r'^https?://[^/]+/files/tmp/([A-Za-z0-9_\-]{20,64})$')
+
+_tmp_lock = threading.Lock()
+_tmp_uploads = {}  # token -> {content_type, filename, expires_at, data: bytes|None}
+
+
+def _purge_expired_tmp_uploads():
+    now = time.monotonic()
+    with _tmp_lock:
+        expired = [t for t, e in _tmp_uploads.items() if e['expires_at'] <= now]
+        for t in expired:
+            del _tmp_uploads[t]
+
+
+def _tmp_storage_used_bytes():
+    with _tmp_lock:
+        return sum(len(e['data']) for e in _tmp_uploads.values() if e.get('data'))
+
+
+@app.route('/files/presign', methods=['POST'])
+def files_presign():
+    forced = _forced_error()
+    if forced:
+        return forced
+    if not _check_rate_limit(_client_key('presign')):
+        return _error_response('RATE_LIMITED', 'Qua tan suat cho phep, vui long thu lai sau', 429)
+
+    _purge_expired_tmp_uploads()
+
+    body = request.get_json(silent=True) or {}
+    filename = body.get('filename', '')
+    content_type = body.get('content_type', '')
+
+    if not filename or content_type not in ALLOWED_UPLOAD_CONTENT_TYPES:
+        return _error_response(
+            'PRESIGN_FAILED',
+            f"content_type phai la mot trong: {', '.join(sorted(ALLOWED_UPLOAD_CONTENT_TYPES))}",
+            422
+        )
+
+    token = secrets.token_urlsafe(32)  # 43 ky tu tu 32 byte ngau nhien (docs muc 6)
+    with _tmp_lock:
+        _tmp_uploads[token] = {
+            'content_type': content_type,
+            'filename': filename,  # chi de log, KHONG xuat hien trong URL tra ve
+            'expires_at': time.monotonic() + PRESIGN_TTL_SEC,
+            'data': None
+        }
+
+    base = request.host_url.rstrip('/')
+    print(f"[PRESIGN] token={token} filename={filename} content_type={content_type}")
+
+    return jsonify({
+        "upload_url": f"{base}/files/upload/{token}",
+        "public_url": f"{base}/files/tmp/{token}",
+        "upload_method": "PUT",
+        "upload_headers": {"Content-Type": content_type},
+        "expires_in": PRESIGN_TTL_SEC
+    }), 200
+
+
+@app.route('/files/upload/<token>', methods=['PUT'])
+def files_upload(token):
+    forced = _forced_error()
+    if forced:
+        return forced
+    if not _check_rate_limit(_client_key('upload')):
+        return _error_response('RATE_LIMITED', 'Qua tan suat cho phep, vui long thu lai sau', 429)
+
+    _purge_expired_tmp_uploads()
+
+    with _tmp_lock:
+        entry = _tmp_uploads.get(token)
+    if not entry:
+        return _error_response('UPLOAD_TOKEN_INVALID', 'Token khong ton tai hoac da het han', 404)
+
+    sent_content_type = (request.content_type or '').split(';')[0].strip()
+    if sent_content_type != entry['content_type']:
+        return _error_response(
+            'UPLOAD_CONTENT_TYPE_MISMATCH',
+            f"Content-Type '{sent_content_type}' khong khop voi '{entry['content_type']}' luc presign",
+            400
+        )
+
+    data = request.get_data()
+    if not data:
+        return _error_response('EMPTY_FILE', 'Body rong', 400)
+    if len(data) > MAX_UPLOAD_FILE_BYTES:
+        return _error_response('FILE_TOO_LARGE', 'File vuot qua 25 MB', 413)
+    if _tmp_storage_used_bytes() + len(data) > MAX_TMP_STORAGE_BYTES:
+        return _error_response('SERVER_BUSY', 'Kho tam da day (tran 200 MB), vui long thu lai sau', 503)
+
+    with _tmp_lock:
+        entry['data'] = data
+    print(f"[UPLOAD] token={token} bytes={len(data)}")
+
+    return '', 204
+
+
+@app.route('/files/tmp/<token>', methods=['GET'])
+def files_tmp(token):
+    _purge_expired_tmp_uploads()
+    with _tmp_lock:
+        entry = _tmp_uploads.get(token)
+    if not entry or entry.get('data') is None:
+        return _error_response('UPLOAD_TOKEN_INVALID', 'Token khong ton tai, chua upload, hoac da het han', 404)
+
+    from flask import Response
+    return Response(entry['data'], mimetype=entry['content_type'])
+
+
+# ----------------------------------------------------
 # 3. POST /auth/token
 # ----------------------------------------------------
 @app.route('/auth/token', methods=['POST'])
@@ -496,7 +631,22 @@ def process_document():
     if not file_url or len(file_url) > 2048:
         return _error_response('INVALID_PROCESS_PAYLOAD', 'file_url thieu hoac vuot qua 2048 ky tu', 422)
 
-    if '127.0.0.1' in file_url or 'localhost' in file_url:
+    # file_url tro ve chinh storage tam cua server nay (tra ve tu POST
+    # /files/presign) thi doc thang tu bo nho theo token, KHONG bi chan boi luat
+    # cam localhost o duoi — dung nhu ghi chu docs/en/docflowv2.md muc 8:
+    # "backend doc bytes truc tiep tu bo nho theo token, khong di qua HTTP".
+    # Cac URL khac van phai la link cong khai that su, khong duoc tro ve localhost.
+    consumed_tmp_token = None
+    own_tmp_match = TMP_URL_RE.match(file_url)
+    if own_tmp_match:
+        candidate_token = own_tmp_match.group(1)
+        _purge_expired_tmp_uploads()
+        with _tmp_lock:
+            tmp_entry = _tmp_uploads.get(candidate_token)
+        if not tmp_entry or tmp_entry.get('data') is None:
+            return _error_response('INVALID_FILE_URL', 'Token upload khong ton tai, chua duoc upload, hoac da het han', 422)
+        consumed_tmp_token = candidate_token
+    elif '127.0.0.1' in file_url or 'localhost' in file_url:
         return _error_response('INVALID_FILE_URL', 'file_url phai la URL PDF cong khai hop le', 422)
 
     global _active_jobs
@@ -556,6 +706,11 @@ def process_document():
     finally:
         with _active_jobs_lock:
             _active_jobs -= 1
+        # docs/en/docflowv2.md muc 7: "bi xoa ngay sau khi /documents/process xu ly
+        # xong" — don don thay vi de token song het TTL 10 phut goc.
+        if consumed_tmp_token:
+            with _tmp_lock:
+                _tmp_uploads.pop(consumed_tmp_token, None)
 
 # ----------------------------------------------------
 # 5. POST /documents/lookup
@@ -669,6 +824,8 @@ if __name__ == '__main__':
 |     DocFlow AI Mock Backend v3.1 (Flask)             |
 |     Running on http://localhost:5000                 |
 |     Endpoint: POST /documents/process                |
+|     Endpoint: POST /files/presign                    |
+|     Endpoint: PUT  /files/upload/<token>              |
 +------------------------------------------------------+
     """)
     app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)
