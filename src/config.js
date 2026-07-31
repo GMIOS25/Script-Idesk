@@ -18,6 +18,7 @@ export const CONFIG = {
         SELECT_DOC: 1000,
         CLICK_SAVE_TRANSFER: 1200,
         OPEN_TREE: 800,
+        EXPAND_TREE: 600,
         TREE_SEARCH: 500,
         CLOSE_TREE: 350,
         AFTER_SUBMIT: 1800,

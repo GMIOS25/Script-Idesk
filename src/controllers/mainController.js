@@ -3,7 +3,7 @@ import { docCache, state, setProcessing } from '../state.js';
 import { setStatus, appendLog } from '../utils/logger.js';
 import { sleep, applyDeadlineDays } from '../utils/helpers.js';
 import { ensureDocDetails } from '../services/api.js';
-import { callAIBackend, lookupDocument } from '../services/ai.js';
+import { callAIBackend, lookupDocument, patchDocument } from '../services/ai.js';
 import { autoFillAndSubmit } from '../automation/formFiller.js';
 import { primeUnitTreeDirect } from '../automation/unitPrimer.js';
 import { scanList } from '../services/scanner.js';
@@ -137,26 +137,48 @@ export const updateProgress = (current, total) => {
     emit('progress', { current, total });
 };
 
+// Đồng bộ chỉnh sửa tay của người dùng (đơn vị xử lý/phối hợp, hạn thực hiện...)
+// lên backend qua PATCH /documents/{stt} (patchDocument() trong services/ai.js),
+// ngay sau khi đã cập nhật doc.aiData trong RAM. Nếu không làm bước này, lần
+// tra cứu lại văn bản sau đó (lookupDocument hoặc nhánh cache của
+// /documents/process) sẽ trả về dữ liệu AI gốc, chưa sửa.
+// Chạy "best-effort" và không await ở nơi gọi: PATCH lỗi (mất mạng, 429, ...)
+// chỉ ghi log cảnh báo chứ không revert lại doc.aiData hay chặn UI, để người
+// dùng không mất thao tác chỉnh sửa đang hiển thị trên màn hình review.
+const persistAiDataPatch = async (doc, fields) => {
+    if (!doc || !doc.aiData || !doc.aiData.stt) return;
+    try {
+        await patchDocument(doc.aiData.stt, fields);
+    } catch (err) {
+        appendLog(`${doc.signNumber || doc.aiData.stt}: luu chinh sua len backend that bai (${err.message}) - thay doi van duoc giu tam trong phien lam viec, thu lai sau`);
+    }
+};
+
 // Người dùng bấm "×" trên 1 chip đơn vị xử lý chính/phối hợp để xoá khỏi kết quả
-// AI đang review (chỉ sửa dữ liệu trong bộ nhớ, không đụng gì tới hệ thống thật).
+// AI đang review. Cập nhật doc.aiData trong bộ nhớ để UI phản hồi ngay, đồng thời
+// PATCH lên backend để lần tra cứu sau còn nhớ chỉnh sửa này.
 on('unit-remove-requested', ({ id, kind, value }) => {
     const doc = docCache.get(id);
     if (!doc || !doc.aiData) return;
 
     if (kind === 'main') {
         doc.aiData.processing_unit = null;
+        emit('docs-changed');
+        persistAiDataPatch(doc, { processing_unit: null });
     } else {
         // Nếu coordinating_units không phải mảng (vi phạm docflow.md mục 4), coi thao
         // tác xoá như "reset về rỗng" thay vì cố lọc theo giá trị.
         const arr = Array.isArray(doc.aiData.coordinating_units) ? doc.aiData.coordinating_units : [];
         doc.aiData.coordinating_units = arr.filter(u => u !== value);
+        emit('docs-changed');
+        persistAiDataPatch(doc, { coordinating_units: doc.aiData.coordinating_units });
     }
-    emit('docs-changed');
 });
 
 // Người dùng chọn xong 1 đơn vị/người trong dropdown (unitPicker) — ghi nhận vào
 // aiData của văn bản tương ứng. Đơn vị xử lý chính chỉ 1 giá trị (thay thế), đơn
-// vị phối hợp cho phép nhiều giá trị (thêm vào, không trùng lặp).
+// vị phối hợp cho phép nhiều giá trị (thêm vào, không trùng lặp). Sau khi cập
+// nhật RAM, PATCH lên backend để lưu lại chỉnh sửa.
 on('unit-add-confirmed', ({ id, kind, label }) => {
     const doc = docCache.get(id);
     if (!doc) return;
@@ -164,22 +186,26 @@ on('unit-add-confirmed', ({ id, kind, label }) => {
 
     if (kind === 'main') {
         doc.aiData.processing_unit = label;
+        emit('docs-changed');
+        persistAiDataPatch(doc, { processing_unit: label });
     } else {
         doc.aiData.coordinating_units = Array.isArray(doc.aiData.coordinating_units) ? doc.aiData.coordinating_units : [];
         if (!doc.aiData.coordinating_units.includes(label)) doc.aiData.coordinating_units.push(label);
+        emit('docs-changed');
+        persistAiDataPatch(doc, { coordinating_units: doc.aiData.coordinating_units });
     }
-    emit('docs-changed');
 });
 
 // Người dùng chỉnh số ngày hạn thực hiện qua popover (deadlineEditor) — chỉ số ngày
 // (01-100) được thay đổi, phần văn phong còn lại của AI (nếu có) được giữ nguyên
-// nhờ applyDeadlineDays().
+// nhờ applyDeadlineDays(). Sau khi cập nhật RAM, PATCH lên backend để lưu lại.
 on('deadline-update-confirmed', ({ id, days }) => {
     const doc = docCache.get(id);
     if (!doc) return;
     doc.aiData = doc.aiData || {};
     doc.aiData.implementation_deadline = applyDeadlineDays(doc.aiData.implementation_deadline, days);
     emit('docs-changed');
+    persistAiDataPatch(doc, { implementation_deadline: doc.aiData.implementation_deadline });
 });
 
 // Logic tự đăng ký lắng nghe thao tác của người dùng trên UI, thay vì UI import thẳng

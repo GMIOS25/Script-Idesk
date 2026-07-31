@@ -317,9 +317,11 @@ export const lookupDocument = async (doc) => {
 // 6 truong duy nhat PATCH /documents/{stt} chap nhan (docs/en/docflow.md muc 6).
 const PATCHABLE_FIELDS = ['summary', 'processing_unit', 'monitoring_leader', 'implementation_deadline', 'coordinating_units', 'notes'];
 
-// PATCH /documents/{stt} — hien chua co UI nao goi ham nay (xem ghi chu trong
-// controllers/mainController.js); chuan bi san de tinh nang "hieu chinh AI" sau
-// nay dung lai, thay vi tiep tuc de endpoint da dac ta nhung khong ai dung toi.
+// PATCH /documents/{stt} — duoc goi (fire-and-forget) tu controllers/mainController.js
+// moi khi nguoi dung sua tay processing_unit/coordinating_units/implementation_deadline
+// tren UI review, de luu lai chinh sua vao backend. Neu khong PATCH, lan tra cuu
+// sau (lookupDocument hoac nhanh cache cua /documents/process) se tra ve du lieu
+// AI goc, chua sua.
 export const patchDocument = async (stt, fields) => {
     const body = {};
     for (const key of PATCHABLE_FIELDS) {
