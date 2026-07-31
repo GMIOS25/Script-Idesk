@@ -5,11 +5,18 @@ docs/en/METADATA_SCHEMA.md (NGUON SU THAT DUY NHAT ve schema).
 
 Endpoints ho tro:
 - POST /auth/token              : Lay access token
+- POST /files/presign            : Xin URL tam de day file len (docs/en/docflowv2.md muc 6)
+- PUT  /files/upload/<token>     : Day bytes tho cua file (docs/en/docflowv2.md muc 7)
+- GET  /files/tmp/<token>        : Tai lai file tam (docs/en/docflowv2.md muc 8)
 - POST /documents/process       : Tra cache hoac xu ly van ban (Endpoint chinh)
 - POST /api/v1/documents/process: Alias cho /documents/process
 - POST /api/process-doc         : Legacy endpoint (backward compatibility)
 - POST /documents/lookup        : Tra metadata van ban khong can file URL
 - PATCH /documents/<stt>        : Cap nhat 6 truong thong tin AI
+- GET  /wards                    : Danh sach xa trong danh muc to chuc (muc 12.1)
+- GET  /wards/compare            : So sanh cac xa theo comparison_code (muc 12.2)
+- GET  /wards/<ward_code>/organizations    : Don vi cua 1 xa (muc 12.3)
+- GET  /organizations/<id>/entries         : Chuc danh/dau moi cua 1 don vi (muc 12.4)
 - GET  /health                  : Check Liveness
 - GET  /health/ready            : Check Readiness
 
@@ -23,19 +30,31 @@ Hanh vi loi (docs/en/docflow.md muc 9-10):
     X-Mock-Force-Error: RATE_LIMITED | SERVER_BUSY | VALIDATION
 """
 
+import sys
 import os
 import re
 import json
 import time
 import uuid
 import random
+import secrets
 import threading
 from collections import defaultdict, deque
+
+# Dam bao terminal log tieng Viet khong bi loi font/encoding tren Windows
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
 
 from flask import Flask, request, jsonify, g
 from flask_cors import CORS
 
 app = Flask(__name__)
+app.config['JSON_AS_ASCII'] = False
+if hasattr(app, 'json'):
+    app.json.ensure_ascii = False
+
 CORS(app, expose_headers=['X-Request-Id'])
 
 # ----------------------------------------------------
@@ -103,6 +122,71 @@ def _attach_request_id(response):
 
 
 # ----------------------------------------------------
+# 0b. Bearer auth (docs/en/docflowv2.md muc 1): moi endpoint TRU /auth/token,
+#     /health, /health/ready deu doi hoi header:
+#         Authorization: Bearer <access_token>
+#     Truoc ban nay, mock hoan toan khong xac thuc token (_client_key chi dung
+#     no lam key rate-limit) -> khac hanh vi server that (xem
+#     docs/en/api_host.md, Request 3: goi /documents/lookup thieu token phai
+#     tra 401 UNAUTHORIZED). Token phat ra tu /auth/token duoc luu tam trong
+#     bo nho (khong persist qua restart, du cho muc dich mock) kem TTL 24h
+#     dung nhu `expires_in` da cong bo o muc 5.
+# ----------------------------------------------------
+AUTH_EXEMPT_ENDPOINTS = {'auth_token', 'health', 'health_ready'}
+BEARER_RE = re.compile(r'^Bearer\s+(.+)$', re.IGNORECASE)
+TOKEN_TTL_SEC = 86400
+
+_issued_tokens_lock = threading.Lock()
+_issued_tokens = {}  # token -> epoch expiry (time.time())
+
+
+def _issue_token():
+    token = f"mock_bearer_token_{uuid.uuid4().hex[:16]}"
+    with _issued_tokens_lock:
+        _issued_tokens[token] = time.time() + TOKEN_TTL_SEC
+    return token
+
+
+def _is_token_valid(token):
+    with _issued_tokens_lock:
+        expires_at = _issued_tokens.get(token)
+        if expires_at is None:
+            return False
+        if expires_at < time.time():
+            del _issued_tokens[token]
+            return False
+        return True
+
+
+@app.before_request
+def _enforce_bearer_auth():
+    # Preflight CORS khong kem Authorization -> luon cho qua.
+    if request.method == 'OPTIONS':
+        return None
+    # Route khong khop endpoint nao (vd 404) -> de Flask xu ly binh thuong,
+    # khong che bang 401 truoc khi kip bao 404.
+    if request.endpoint is None or request.endpoint in AUTH_EXEMPT_ENDPOINTS:
+        return None
+
+    match = BEARER_RE.match(request.headers.get('Authorization', ''))
+    if not match:
+        return _error_response(
+            'UNAUTHORIZED',
+            'Thieu hoac sai dinh dang header Authorization: Bearer <access_token>',
+            401
+        )
+
+    if not _is_token_valid(match.group(1).strip()):
+        return _error_response(
+            'UNAUTHORIZED',
+            'Token khong hop le hoac da het han, goi lai POST /auth/token',
+            401
+        )
+
+    return None
+
+
+# ----------------------------------------------------
 # 1. Validation payload theo hop dong API (docs/en/docflow.md muc 4-6)
 # ----------------------------------------------------
 REQUIRED_METADATA_FIELDS = ['document_number', 'document_type', 'issuing_agency', 'document_date', 'signer', 'subject']
@@ -112,23 +196,35 @@ PATCHABLE_FIELDS = {'summary', 'processing_unit', 'monitoring_leader', 'implemen
 
 def _validate_identity_metadata(metadata):
     """Dung chung cho POST /documents/process (key `metadata`) va POST
-    /documents/lookup (chinh body request) — ca hai deu doi hoi dung 6 truong
-    identity theo docs muc 4."""
+    /documents/lookup (chinh body request).
+
+    Doi lai theo hanh vi thuc te cua server that: khi cao du lieu bi thieu 1
+    vai truong trong 6 truong identity, server VAN CHAP NHAN request va xu ly
+    tiep voi cac truong con lai — truong nao thieu thi tra ve null, KHONG con
+    tra loi 422 nhu truoc day nua. Chi tra loi khi:
+      - metadata khong phai JSON object, HOAC
+      - metadata rong hoan toan (khong co truong nao ca -> khong the dinh
+        danh duoc van ban nay la van ban gi), HOAC
+      - mot truong DA DUOC GUI (khong rong) nhung sai kieu / qua dai / sai
+        dinh dang — day la loi du lieu that su, khac voi truong hop "thieu".
+    """
     if not isinstance(metadata, dict):
         return "metadata phai la mot JSON object"
 
-    missing = [f for f in REQUIRED_METADATA_FIELDS if not metadata.get(f)]
-    if missing:
-        return f"Thieu truong bat buoc: {', '.join(missing)}"
+    if not any(metadata.get(f) for f in REQUIRED_METADATA_FIELDS):
+        return f"Metadata rong hoan toan, can it nhat 1 trong cac truong: {', '.join(REQUIRED_METADATA_FIELDS)}"
 
     for f in REQUIRED_METADATA_FIELDS:
         val = metadata.get(f)
+        if not val:
+            continue  # thieu truong nay -> chap nhan, se tra ve null cho FE
         if not isinstance(val, str):
             return f"Truong '{f}' phai la string"
         if len(val) > 500:
             return f"Truong '{f}' vuot qua 500 ky tu"
 
-    if not DATE_RE.match(metadata.get('document_date', '')):
+    document_date = metadata.get('document_date')
+    if document_date and not DATE_RE.match(document_date):
         return "document_date phai theo dinh dang YYYY-MM-DD"
 
     return None
@@ -421,9 +517,292 @@ def _find_sample_by_stt(stt):
     return None
 
 
+IDENTITY_FIELDS = ('document_number', 'document_type', 'issuing_agency', 'document_date', 'signer', 'subject')
+
+
+def _find_cached_by_identity(metadata):
+    """Nhanh CACHE cua POST /documents/process (docs/en/docflowv2.md muc 9):
+    tra dung 6 truong dinh danh, KHONG dong den file_url. Van ban da tung
+    duoc xu ly (nam trong PROCESSED_DOCS) voi CUNG 6 truong nay -> tra ve
+    ban ghi cu ngay, khong goi AI lai."""
+    wanted = tuple(metadata.get(k) for k in IDENTITY_FIELDS)
+    for data in PROCESSED_DOCS.values():
+        if tuple(data.get(k) for k in IDENTITY_FIELDS) == wanted:
+            return data.copy()
+    return None
+
+
+# ----------------------------------------------------
+# 2b. POST /files/presign, PUT /files/upload/<token>, GET /files/tmp/<token>
+#     (docs/en/docflowv2.md muc 2 nhanh (b), muc 6-8) — mo phong storage tam de
+#     FE day file that len truoc khi goi /documents/process, thay the viec gui
+#     thang link noi bo iDesk (yeu cau cookie phien dang nhap cua nguoi dung,
+#     xem docs/changes/De_xuat_presigned_url.md).
+# ----------------------------------------------------
+ALLOWED_UPLOAD_CONTENT_TYPES = {
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'text/plain',
+}
+
+PRESIGN_TTL_SEC = int(os.environ.get('MOCK_PRESIGN_TTL_SEC', '600'))       # 10 phut (muc 6-7)
+MAX_UPLOAD_FILE_BYTES = 25 * 1024 * 1024                                    # 25 MB (muc 7)
+MAX_TMP_STORAGE_BYTES = int(os.environ.get('MOCK_MAX_TMP_STORAGE_MB', '200')) * 1024 * 1024  # kho tam 200 MB
+
+# Nhan dien file_url tro ve chinh storage tam cua server nay (khac voi 1 URL
+# cong khai that su ben ngoai) de /documents/process doc thang tu bo nho theo
+# token thay vi that su di fetch qua HTTP (dung nhu ghi chu o muc 8).
+TMP_URL_RE = re.compile(r'^https?://[^/]+/files/tmp/([A-Za-z0-9_\-]{20,64})$')
+
+_tmp_lock = threading.Lock()
+_tmp_uploads = {}  # token -> {content_type, filename, expires_at, data: bytes|None}
+
+
+def _purge_expired_tmp_uploads():
+    now = time.monotonic()
+    with _tmp_lock:
+        expired = [t for t, e in _tmp_uploads.items() if e['expires_at'] <= now]
+        for t in expired:
+            del _tmp_uploads[t]
+
+
+def _tmp_storage_used_bytes():
+    with _tmp_lock:
+        return sum(len(e['data']) for e in _tmp_uploads.values() if e.get('data'))
+
+
+@app.route('/files/presign', methods=['POST'])
+def files_presign():
+    forced = _forced_error()
+    if forced:
+        return forced
+    if not _check_rate_limit(_client_key('presign')):
+        return _error_response('RATE_LIMITED', 'Qua tan suat cho phep, vui long thu lai sau', 429)
+
+    _purge_expired_tmp_uploads()
+
+    body = request.get_json(silent=True) or {}
+    filename = body.get('filename', '')
+    content_type = body.get('content_type', '')
+
+    if not filename or content_type not in ALLOWED_UPLOAD_CONTENT_TYPES:
+        return _error_response(
+            'PRESIGN_FAILED',
+            f"content_type phai la mot trong: {', '.join(sorted(ALLOWED_UPLOAD_CONTENT_TYPES))}",
+            422
+        )
+
+    token = secrets.token_urlsafe(32)  # 43 ky tu tu 32 byte ngau nhien (docs muc 6)
+    with _tmp_lock:
+        _tmp_uploads[token] = {
+            'content_type': content_type,
+            'filename': filename,  # chi de log, KHONG xuat hien trong URL tra ve
+            'expires_at': time.monotonic() + PRESIGN_TTL_SEC,
+            'data': None
+        }
+
+    base = request.host_url.rstrip('/')
+    print(f"[PRESIGN] token={token} filename={filename} content_type={content_type}")
+
+    return jsonify({
+        "upload_url": f"{base}/files/upload/{token}",
+        "public_url": f"{base}/files/tmp/{token}",
+        "upload_method": "PUT",
+        "upload_headers": {"Content-Type": content_type},
+        "expires_in": PRESIGN_TTL_SEC
+    }), 200
+
+
+@app.route('/files/upload/<token>', methods=['PUT'])
+def files_upload(token):
+    forced = _forced_error()
+    if forced:
+        return forced
+    if not _check_rate_limit(_client_key('upload')):
+        return _error_response('RATE_LIMITED', 'Qua tan suat cho phep, vui long thu lai sau', 429)
+
+    _purge_expired_tmp_uploads()
+
+    with _tmp_lock:
+        entry = _tmp_uploads.get(token)
+    if not entry:
+        return _error_response('UPLOAD_TOKEN_INVALID', 'Token khong ton tai hoac da het han', 404)
+
+    sent_content_type = (request.content_type or '').split(';')[0].strip()
+    if sent_content_type != entry['content_type']:
+        return _error_response(
+            'UPLOAD_CONTENT_TYPE_MISMATCH',
+            f"Content-Type '{sent_content_type}' khong khop voi '{entry['content_type']}' luc presign",
+            400
+        )
+
+    data = request.get_data()
+    if not data:
+        return _error_response('EMPTY_FILE', 'Body rong', 400)
+    if len(data) > MAX_UPLOAD_FILE_BYTES:
+        return _error_response('FILE_TOO_LARGE', 'File vuot qua 25 MB', 413)
+    if _tmp_storage_used_bytes() + len(data) > MAX_TMP_STORAGE_BYTES:
+        return _error_response('SERVER_BUSY', 'Kho tam da day (tran 200 MB), vui long thu lai sau', 503)
+
+    with _tmp_lock:
+        entry['data'] = data
+    print(f"[UPLOAD] token={token} bytes={len(data)}")
+
+    return '', 204
+
+
+@app.route('/files/tmp/<token>', methods=['GET'])
+def files_tmp(token):
+    _purge_expired_tmp_uploads()
+    with _tmp_lock:
+        entry = _tmp_uploads.get(token)
+    if not entry or entry.get('data') is None:
+        return _error_response('UPLOAD_TOKEN_INVALID', 'Token khong ton tai, chua upload, hoac da het han', 404)
+
+    from flask import Response
+    return Response(entry['data'], mimetype=entry['content_type'])
+
+
+# ----------------------------------------------------
+# 2c. Danh muc co cau to chuc (Ward -> Organization -> Entry) - docs/en/docflowv2.md
+#     muc 12: 4 endpoint /wards, /wards/compare, /wards/{ward_code}/organizations,
+#     /organizations/{organization_id}/entries. Doc lap tu 2 file du lieu THAT da
+#     co san trong repo (clean_data/payload_vinhthanh.json, payload_phumy.json -
+#     cay to chuc dinh dang unit/dept/alias, xem clean_data/generate_inserts.py)
+#     thay vi hard-code lai bang tay, de tranh sai lech voi du lieu goc. Doc lap
+#     1 lan luc import module, KHONG phu thuoc request nao.
+# ----------------------------------------------------
+_CLEAN_DATA_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    'clean_data'
+)
+
+WARD_SOURCE_FILES = [
+    ("VINH_THANH", "payload_vinhthanh.json"),
+    ("PHU_MY_TAY", "payload_phumy.json"),
+]
+
+# comparison_code duoc gan theo tu khoa trong ten don vi (muc 12.2: "Nhom theo
+# comparison_code, KHONG so theo name - ten don vi giua cac xa khac cach viet
+# (vd 'Van phong UBND va HDND' vs 'Van phong HDND va UBND') nen khop theo ten
+# se sai"). Danh sach luat tu cu the -> chung, dung chung cho ca 2 xa.
+_COMPARISON_CODE_RULES = [
+    (('quân sự',), 'MILITARY_COMMAND'),
+    (('công an',), 'COMMUNE_POLICE'),
+    (('y tế',), 'HEALTH_STATION'),
+    (('kinh tế',), 'ECONOMIC_DEPARTMENT'),
+    (('thông tin', 'thể thao'), 'CULTURE_INFO_SPORTS_CENTER'),
+    (('văn hóa', 'xã hội'), 'CULTURE_SOCIAL_DEPARTMENT'),
+    (('hành chính công',), 'PUBLIC_ADMIN_CENTER'),
+    (('lãnh đạo',), 'COMMITTEE_LEADERSHIP'),
+    (('hội đồng nhân dân',), 'PEOPLE_COUNCIL'),
+    (('trường',), 'SCHOOL'),
+    (('bầu cử',), 'ELECTION_COMMITTEE'),
+    (('thi đua',), 'EMULATION_COMMENDATION_CLUSTER'),
+    (('ban quản lý',), 'MANAGEMENT_BOARD'),
+    (('quản trị',), 'SYSTEM_ADMIN'),
+]
+
+
+def _classify_comparison_code(dept_name):
+    n = (dept_name or '').lower()
+    # Kiem "Van phong UBND/HDND" truoc tien vi ten nay chua ca tu "HDND" (de
+    # nham voi PEOPLE_COUNCIL) lan cac tu khoa khac trong danh sach chung.
+    if 'văn phòng' in n and ('ubnd' in n or 'hđnd' in n):
+        return 'OFFICE_PC_PC'
+    for keywords, code in _COMPARISON_CODE_RULES:
+        if all(kw in n for kw in keywords):
+            return code
+    # Fallback an toan cho ten chua tung gap trong du lieu mau: sinh code on
+    # dinh tu chinh ten thay vi loi, de danh muc moi van hien thi duoc.
+    slug = re.sub(r'[^0-9a-zA-Z]+', '_', dept_name.strip()).strip('_').upper()
+    return slug or 'OTHER'
+
+
+def _load_ward_catalog():
+    """Doc cay to chuc that (unit/dept/alias) cua tung xa tu clean_data/*.json
+    va dung thanh Ward -> Organization -> Entry. Neu thieu file (vd moi truong
+    deploy khong dong kem thu muc clean_data/), tra ve danh muc rong thay vi
+    lam sap ca mock backend (/wards se tra data: [] thay vi loi 500 luc import).
+    """
+    wards = {}
+    organizations_by_id = {}
+    org_seq = 1
+    entry_seq = 1
+
+    for ward_code, filename in WARD_SOURCE_FILES:
+        path = os.path.join(_CLEAN_DATA_DIR, filename)
+        try:
+            with open(path, encoding='utf-8') as f:
+                elements = json.load(f).get('elements', [])
+        except (OSError, ValueError):
+            elements = []
+
+        units = [e for e in elements if e.get('type') == 'unit']
+        depts = [e for e in elements if e.get('type') == 'dept']
+        aliases = [e for e in elements if e.get('type') == 'alias']
+
+        # Tat ca dept trong 1 file deu co chung `parent` = id cua unit goc
+        # (chinh xa do); cac unit cap tren (huyen/tinh) khong nam trong file.
+        root_parent_id = depts[0].get('parent') if depts else None
+        root_unit = next((u for u in units if u['id'] == root_parent_id), None)
+        ward_name = root_unit['name'] if root_unit else ward_code
+
+        organizations = []
+        for dept in depts:
+            dept_entries = []
+            for alias in aliases:
+                if alias.get('parent') != dept['id']:
+                    continue
+                dept_entries.append({
+                    "id": entry_seq,
+                    "source_id": alias['id'],
+                    "position_name": alias.get('name', ''),
+                    "ref_uname": alias.get('refUname', ''),
+                    "ref_fullname": alias.get('refFullname', ''),
+                    "rank": alias.get('rank', ''),
+                    "sort_order": alias.get('order', 0),
+                })
+                entry_seq += 1
+
+            org = {
+                "id": org_seq,
+                "source_id": dept['id'],
+                "name": dept.get('name', ''),
+                "comparison_code": _classify_comparison_code(dept.get('name', '')),
+                "sort_order": dept.get('order', 0),
+                "entries": dept_entries,
+            }
+            organizations.append(org)
+            organizations_by_id[org_seq] = org
+            org_seq += 1
+
+        wards[ward_code] = {
+            "id": len(wards) + 1,
+            "code": ward_code,
+            "name": ward_name,
+            "organizations": organizations,
+        }
+
+    return wards, organizations_by_id
+
+
+WARDS, ORGANIZATIONS_BY_ID = _load_ward_catalog()
+
+
 # ----------------------------------------------------
 # 3. POST /auth/token
+#    Danh sach tai khoan dich vu hop le (docs/en/docflowv2.md muc 5: sai
+#    tai khoan/mat khau -> 401 INVALID_CREDENTIALS). Co the override qua
+#    bien moi truong MOCK_AUTH_USERNAME/MOCK_AUTH_PASSWORD; mac dinh khop
+#    voi bruno/environments/Local.bru (fe-server / secret_password) de FE
+#    chay duoc ngay khong can cau hinh gi them.
 # ----------------------------------------------------
+VALID_CREDENTIALS = {
+    os.environ.get('MOCK_AUTH_USERNAME', 'fe-server-prod'): os.environ.get('MOCK_AUTH_PASSWORD', 'secret_password'),
+}
+
+
 @app.route('/auth/token', methods=['POST'])
 def auth_token():
     forced = _forced_error()
@@ -438,7 +817,15 @@ def auth_token():
 
     print(f"[AUTH] Request token for user: '{username}'")
 
-    token = f"mock_bearer_token_{uuid.uuid4().hex[:16]}"
+    expected_password = VALID_CREDENTIALS.get(username)
+    if expected_password is None or not secrets.compare_digest(password, expected_password):
+        return _error_response(
+            'INVALID_CREDENTIALS',
+            'Sai ten tai khoan hoac mat khau',
+            401
+        )
+
+    token = _issue_token()
     return jsonify({
         "access_token": token,
         "token_type": "bearer",
@@ -496,7 +883,34 @@ def process_document():
     if not file_url or len(file_url) > 2048:
         return _error_response('INVALID_PROCESS_PAYLOAD', 'file_url thieu hoac vuot qua 2048 ky tu', 422)
 
-    if '127.0.0.1' in file_url or 'localhost' in file_url:
+    # Nhanh CACHE (docs muc 9): tra dung 6 truong dinh danh TRUOC, KHONG kiem
+    # file_url (khong SSRF-check, khong doi hoi token tmp con song). Van ban
+    # da xu ly truoc do -> tra ngay ket qua cu, khong goi AI, khong tang
+    # _active_jobs, khong dong den tmp storage.
+    cached = _find_cached_by_identity(metadata)
+    if cached is not None:
+        response_payload = {"source": "cache", "data": cached}
+        print("\nCache hit theo 6 truong dinh danh - tra ngay, khong goi AI")
+        print(json.dumps(response_payload, indent=2, ensure_ascii=False))
+        print("=" * 60)
+        return jsonify(response_payload), 200
+
+    # file_url tro ve chinh storage tam cua server nay (tra ve tu POST
+    # /files/presign) thi doc thang tu bo nho theo token, KHONG bi chan boi luat
+    # cam localhost o duoi — dung nhu ghi chu docs/en/docflowv2.md muc 8:
+    # "backend doc bytes truc tiep tu bo nho theo token, khong di qua HTTP".
+    # Cac URL khac van phai la link cong khai that su, khong duoc tro ve localhost.
+    consumed_tmp_token = None
+    own_tmp_match = TMP_URL_RE.match(file_url)
+    if own_tmp_match:
+        candidate_token = own_tmp_match.group(1)
+        _purge_expired_tmp_uploads()
+        with _tmp_lock:
+            tmp_entry = _tmp_uploads.get(candidate_token)
+        if not tmp_entry or tmp_entry.get('data') is None:
+            return _error_response('INVALID_FILE_URL', 'Token upload khong ton tai, chua duoc upload, hoac da het han', 422)
+        consumed_tmp_token = candidate_token
+    elif '127.0.0.1' in file_url or 'localhost' in file_url:
         return _error_response('INVALID_FILE_URL', 'file_url phai la URL PDF cong khai hop le', 422)
 
     global _active_jobs
@@ -533,13 +947,15 @@ def process_document():
             print(f"Random processing_unit: {random_processing_unit}")
             print(f"Random coordinating_units: {random_coordinating_units}")
 
-        # Update dynamic fields (FE authoritative — field 2-7 theo METADATA_SCHEMA.md)
-        matched_data["document_number"] = doc_number or matched_data["document_number"]
-        matched_data["document_type"] = metadata.get('document_type') or matched_data["document_type"]
-        matched_data["issuing_agency"] = metadata.get('issuing_agency') or matched_data["issuing_agency"]
-        matched_data["document_date"] = metadata.get('document_date') or matched_data["document_date"]
-        matched_data["signer"] = metadata.get('signer') or matched_data["signer"]
-        matched_data["subject"] = subject or matched_data["subject"]
+        # Update dynamic fields (FE authoritative — field 2-7 theo METADATA_SCHEMA.md).
+        # FE co the cao thieu 1 vai truong (xem _validate_identity_metadata da noi
+        # long o tren): truong nao FE KHONG gui (rong/None) thi tra ve dung null,
+        # KHONG con tu dien gia tri mau/doan tu matched_data nua — vi day la cac
+        # truong FE-authoritative, tu dien vao se tao cam giac sai la "da co du
+        # lieu" trong khi thuc ra van con thieu.
+        for _identity_field in REQUIRED_METADATA_FIELDS:
+            _val = metadata.get(_identity_field)
+            matched_data[_identity_field] = _val if _val else None
 
         PROCESSED_DOCS[matched_data["stt"]] = matched_data.copy()
 
@@ -556,6 +972,11 @@ def process_document():
     finally:
         with _active_jobs_lock:
             _active_jobs -= 1
+        # docs/en/docflowv2.md muc 7: "bi xoa ngay sau khi /documents/process xu ly
+        # xong" — don don thay vi de token song het TTL 10 phut goc.
+        if consumed_tmp_token:
+            with _tmp_lock:
+                _tmp_uploads.pop(consumed_tmp_token, None)
 
 # ----------------------------------------------------
 # 5. POST /documents/lookup
@@ -613,12 +1034,12 @@ def patch_document(stt):
 
     patch_body = request.get_json(silent=True)
     if not isinstance(patch_body, dict) or not patch_body:
-        return _error_response('INVALID_PATCH_PAYLOAD', 'Body phai la JSON object va co it nhat 1 truong', 422)
+        return _error_response('INVALID_UPDATE_PAYLOAD', 'Body phai la JSON object va co it nhat 1 truong', 422)
 
     unknown_fields = [k for k in patch_body.keys() if k not in PATCHABLE_FIELDS]
     if unknown_fields:
         return _error_response(
-            'INVALID_PATCH_PAYLOAD',
+            'INVALID_UPDATE_PAYLOAD',
             f"Chi nhan cac truong {sorted(PATCHABLE_FIELDS)}, nhan duoc truong khong hop le: {', '.join(unknown_fields)}",
             422
         )
@@ -641,7 +1062,134 @@ def patch_document(stt):
     return jsonify({"data": updated}), 200
 
 # ----------------------------------------------------
-# 7. GET /health & GET /health/ready
+# 7. GET /wards, /wards/compare, /wards/<ward_code>/organizations,
+#    GET /organizations/<organization_id>/entries (docs/en/docflowv2.md muc 12)
+#    Doc du lieu tu WARDS/ORGANIZATIONS_BY_ID (muc 2c o tren) — doc lap
+#    luc import module, DOC LAP voi luong /documents/* ben tren, goi luc nao
+#    cung duoc dung nhu ghi chu o dau file docs/en/docflowv2.md.
+# ----------------------------------------------------
+@app.route('/wards', methods=['GET'])
+def list_wards():
+    forced = _forced_error()
+    if forced:
+        return forced
+    if not _check_rate_limit(_client_key('wards')):
+        return _error_response('RATE_LIMITED', 'Qua tan suat cho phep, vui long thu lai sau', 429)
+
+    data = [{
+        "id": ward["id"],
+        "code": ward["code"],
+        "name": ward["name"],
+        "organization_count": len(ward["organizations"]),
+        "entry_count": sum(len(org["entries"]) for org in ward["organizations"]),
+    } for ward in WARDS.values()]
+
+    return jsonify({"data": data}), 200
+
+
+@app.route('/wards/compare', methods=['GET'])
+def compare_wards():
+    forced = _forced_error()
+    if forced:
+        return forced
+    if not _check_rate_limit(_client_key('wards_compare')):
+        return _error_response('RATE_LIMITED', 'Qua tan suat cho phep, vui long thu lai sau', 429)
+
+    # ?ward_code=A&ward_code=B (lap lai duoc, xem muc 12.2). Bo trong = so tat
+    # ca xa. Loai trung neu FE lo gui trung ma xa.
+    requested = request.args.getlist('ward_code')
+    ward_codes = list(dict.fromkeys(requested)) if requested else list(WARDS.keys())
+
+    unknown = [c for c in ward_codes if c not in WARDS]
+    if unknown:
+        return _error_response(
+            'WARD_NOT_FOUND',
+            f"Khong tim thay ma xa: {', '.join(unknown)}",
+            404
+        )
+
+    # Thu thap comparison_code theo dung thu tu xuat hien dau tien trong cac
+    # xa duoc chon, dam bao MOI xa duoc chon deu co mat trong tung nhom (ke ca
+    # voi o 0/0) dung yeu cau "xa khong co don vi nao trong nhom van xuat hien".
+    comparison_codes = []
+    seen = set()
+    for code in ward_codes:
+        for org in WARDS[code]["organizations"]:
+            if org["comparison_code"] not in seen:
+                seen.add(org["comparison_code"])
+                comparison_codes.append(org["comparison_code"])
+
+    data = []
+    for comp_code in comparison_codes:
+        wards_field = {}
+        for code in ward_codes:
+            matched = [o for o in WARDS[code]["organizations"] if o["comparison_code"] == comp_code]
+            wards_field[code] = {
+                "organization_count": len(matched),
+                "entry_count": sum(len(o["entries"]) for o in matched),
+            }
+        data.append({"comparison_code": comp_code, "wards": wards_field})
+
+    return jsonify({"ward_codes": ward_codes, "data": data}), 200
+
+
+@app.route('/wards/<ward_code>/organizations', methods=['GET'])
+def ward_organizations(ward_code):
+    forced = _forced_error()
+    if forced:
+        return forced
+    if not _check_rate_limit(_client_key('ward_orgs')):
+        return _error_response('RATE_LIMITED', 'Qua tan suat cho phep, vui long thu lai sau', 429)
+
+    ward = WARDS.get(ward_code)
+    if ward is None:
+        return _error_response('WARD_NOT_FOUND', f"Khong tim thay ma xa '{ward_code}'", 404)
+
+    # Sap theo (sort_order, source_id) - luon dung ca 2 khoa vi sort_order mot
+    # minh khong tat dinh (co xa toan bo sort_order = 0, xem muc 12.3).
+    ordered = sorted(ward["organizations"], key=lambda o: (o["sort_order"], o["source_id"]))
+    data = [{
+        "id": o["id"],
+        "source_id": o["source_id"],
+        "name": o["name"],
+        "comparison_code": o["comparison_code"],
+        "sort_order": o["sort_order"],
+        "entry_count": len(o["entries"]),
+    } for o in ordered]
+
+    return jsonify({"ward_code": ward_code, "data": data}), 200
+
+
+@app.route('/organizations/<int:organization_id>/entries', methods=['GET'])
+def organization_entries(organization_id):
+    forced = _forced_error()
+    if forced:
+        return forced
+    if not _check_rate_limit(_client_key('org_entries')):
+        return _error_response('RATE_LIMITED', 'Qua tan suat cho phep, vui long thu lai sau', 429)
+
+    org = ORGANIZATIONS_BY_ID.get(organization_id)
+    if org is None:
+        return _error_response('ORGANIZATION_NOT_FOUND', f"Khong tim thay don vi co id={organization_id}", 404)
+
+    # Cung ap dung (sort_order, source_id) nhu muc 12.3 de dam bao thu tu tat
+    # dinh — doc khong noi ro thu tu cho 12.4 nen dung nhat quan voi 12.3.
+    ordered = sorted(org["entries"], key=lambda e: (e["sort_order"], e["source_id"]))
+    data = [{
+        "id": e["id"],
+        "source_id": e["source_id"],
+        "position_name": e["position_name"],
+        "ref_uname": e["ref_uname"],
+        "ref_fullname": e["ref_fullname"],
+        "rank": e["rank"],
+        "sort_order": e["sort_order"],
+    } for e in ordered]
+
+    return jsonify({"organization_id": organization_id, "data": data}), 200
+
+
+# ----------------------------------------------------
+# 8. GET /health & GET /health/ready
 # ----------------------------------------------------
 @app.route('/health', methods=['GET'])
 def health():
@@ -669,6 +1217,8 @@ if __name__ == '__main__':
 |     DocFlow AI Mock Backend v3.1 (Flask)             |
 |     Running on http://localhost:5000                 |
 |     Endpoint: POST /documents/process                |
+|     Endpoint: POST /files/presign                    |
+|     Endpoint: PUT  /files/upload/<token>              |
 +------------------------------------------------------+
     """)
     app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)

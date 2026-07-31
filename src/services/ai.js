@@ -82,6 +82,98 @@ export const getAuthToken = () => {
     });
 };
 
+// POST /files/presign (docs/en/docflowv2.md muc 6) — xin cap URL tam de day file
+// PDF that len, thay cho viec gui thang link noi bo iDesk (yeu cau cookie phien
+// dang nhap cua nguoi dung -> AI backend that, chay o server khac, khong tai duoc).
+const presignFileOnce = (pdfFile, token) => {
+    return new Promise((resolve) => {
+        const headers = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        GM_xmlhttpRequest({
+            method: 'POST',
+            url: CONFIG.PRESIGN_URL,
+            headers,
+            data: JSON.stringify({ filename: pdfFile.name, content_type: 'application/pdf' }),
+            onload: (resp) => {
+                if (resp.status === 200) {
+                    try {
+                        resolve({ ok: true, data: JSON.parse(resp.responseText) });
+                    } catch (e) {
+                        resolve({ ok: false, retryable: false, error: new Error(`Parse JSON loi (presign): ${e.message}`) });
+                    }
+                    return;
+                }
+                const errPayload = parseErrorPayload(resp);
+                resolve({ ok: false, retryable: RETRYABLE_STATUS.has(resp.status), status: resp.status, error: new Error(`Presign HTTP ${resp.status} (${errPayload.code || '?'}): ${errPayload.message}`) });
+            },
+            onerror: () => resolve({ ok: false, retryable: true, error: new Error('Khong ket noi duoc /files/presign') }),
+            ontimeout: () => resolve({ ok: false, retryable: true, error: new Error('Timeout goi /files/presign') })
+        });
+    });
+};
+
+// PUT /files/upload/{token} (docs/en/docflowv2.md muc 7) — day thang BYTES THO cua
+// file, KHONG boc JSON, KHONG multipart. Header Content-Type phai khop CHINH XAC
+// gia tri trong upload_headers tra ve tu buoc presign, sai se bi 400
+// UPLOAD_CONTENT_TYPE_MISMATCH. Response thanh cong la 204 No Content, khong co body.
+const uploadFileOnce = (uploadUrl, uploadHeaders, pdfFile, token) => {
+    return new Promise((resolve) => {
+        const headers = Object.assign({}, uploadHeaders);
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        GM_xmlhttpRequest({
+            method: 'PUT',
+            url: uploadUrl,
+            headers,
+            data: pdfFile,
+            onload: (resp) => {
+                if (resp.status === 204 || resp.status === 200) {
+                    resolve({ ok: true });
+                    return;
+                }
+                const errPayload = parseErrorPayload(resp);
+                resolve({ ok: false, retryable: RETRYABLE_STATUS.has(resp.status), status: resp.status, error: new Error(`Upload HTTP ${resp.status} (${errPayload.code || '?'}): ${errPayload.message}`) });
+            },
+            onerror: () => resolve({ ok: false, retryable: true, error: new Error('Khong ket noi duoc /files/upload') }),
+            ontimeout: () => resolve({ ok: false, retryable: true, error: new Error('Timeout PUT /files/upload') })
+        });
+    });
+};
+
+// Ghep presign + upload thanh 1 buoc co retry/backoff rieng, dung chung CONFIG.RETRY
+// voi callAIBackendOnce. docs/en/docflowv2.md muc 7 co 503 SERVER_BUSY khi kho tam
+// day -> lui vai giay roi thu lai, nen ap dung retry giong het nhanh goi AI chinh.
+const prepareFileUrl = async (doc, pdfFile, token) => {
+    const maxAttempts = CONFIG.RETRY.MAX_ATTEMPTS;
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        setStatus(`Day file "${doc.signNumber}" len storage tam${attempt > 1 ? ` - lan thu ${attempt}` : ''}...`);
+
+        const presignResult = await presignFileOnce(pdfFile, token);
+        if (!presignResult.ok) {
+            lastError = presignResult.error;
+            if (!presignResult.retryable || attempt === maxAttempts) throw lastError;
+            await sleep(CONFIG.RETRY.BASE_DELAY_MS * Math.pow(2, attempt - 1));
+            continue;
+        }
+
+        const { upload_url, public_url, upload_headers } = presignResult.data;
+        const uploadResult = await uploadFileOnce(upload_url, upload_headers, pdfFile, token);
+        if (uploadResult.ok) {
+            appendLog(`Da day file "${pdfFile.name}" len storage tam, public_url: ${public_url}`);
+            return public_url;
+        }
+
+        lastError = uploadResult.error;
+        if (!uploadResult.retryable || attempt === maxAttempts) throw lastError;
+        await sleep(CONFIG.RETRY.BASE_DELAY_MS * Math.pow(2, attempt - 1));
+    }
+
+    throw lastError;
+};
+
 const callAIBackendOnce = (doc, payload, token) => {
     return new Promise((resolve) => {
         const headers = {
@@ -132,9 +224,20 @@ export const callAIBackend = async (doc) => {
         throw new Error(`Khong tim thay file dinh kem phu hop cho VB "${doc.signNumber}"`);
     }
 
-    const bp = state.basePath || getFallbackBasePath();
-    const fileUrl = window.location.origin + `${bp}/docx/download.cpx?docID=${targetAttach.contentUid}&amp;view=pdf`;
     const token = await getAuthToken();
+
+    // Tai file PDF that bang chinh session dang nhap hien tai (GM_xmlhttpRequest
+    // mang theo cookie trinh duyet), roi day len storage tam qua /files/presign +
+    // /files/upload de lay public_url khong con phu thuoc cookie/session cua nguoi
+    // dung (docs/en/docflowv2.md muc 2 nhanh (b) va muc 6-7). Thay the hoan toan
+    // cach cu la gui thang link download.cpx cua iDesk lam file_url — link do chi
+    // tai duoc trong dung phien trinh duyet dang nhap, AI backend that (server
+    // khac) khong co cookie nen luon that bai (xem docs/changes/De_xuat_presigned_url.md).
+    const pdfFile = await downloadPDF(
+        targetAttach.contentUid,
+        targetAttach.name || `doc_${targetAttach.contentUid}.pdf`
+    );
+    const fileUrl = await prepareFileUrl(doc, pdfFile, token);
 
     const payload = {
         metadata: {
