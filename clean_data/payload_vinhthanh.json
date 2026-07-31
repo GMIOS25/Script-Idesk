@@ -149,6 +149,19 @@
             "office": "N"
         },
         {
+            "id": 4058927,
+            "parent": 4058528,
+            "name": "Trưởng thôn",
+            "refCode": "84c0c065-0147-1000-e455-0050568737c9",
+            "refUname": "thondinhbinh@vinhthanh.gialai.gov.vn",
+            "refFullname": "Thôn Định Bình",
+            "type": "alias",
+            "rank": "leader",
+            "order": 0,
+            "config": 0,
+            "office": "N"
+        },
+        {
             "id": 276,
             "parent": 248,
             "name": "UBND Xã Vĩnh Thạnh - Tỉnh Gia Lai",
@@ -415,6 +428,19 @@
             "office": "N"
         },
         {
+            "id": 4058901,
+            "parent": 4058528,
+            "name": "Trưởng thôn",
+            "refCode": "84c0c015-0147-1000-f6dc-0050568737c9",
+            "refUname": "thondinhto@vinhthanh.gialai.gov.vn",
+            "refFullname": "Thôn Định Tố",
+            "type": "alias",
+            "rank": "leader",
+            "order": 0,
+            "config": 0,
+            "office": "N"
+        },
+        {
             "id": 244522,
             "parent": 244521,
             "name": "Văn thư",
@@ -486,6 +512,19 @@
             "refFullname": "Võ Thị Thúy Vân",
             "type": "alias",
             "rank": "unit_leader",
+            "order": 0,
+            "config": 0,
+            "office": "N"
+        },
+        {
+            "id": 4058885,
+            "parent": 4058528,
+            "name": "Trưởng thôn",
+            "refCode": "84c0c0c7-0147-1000-eff1-0050568737c9",
+            "refUname": "thontadiek@vinhthanh.gialai.gov.vn",
+            "refFullname": "Thôn Tà Điệk",
+            "type": "alias",
+            "rank": "leader",
             "order": 0,
             "config": 0,
             "office": "N"
@@ -812,6 +851,29 @@
             "office": "N"
         },
         {
+            "id": 4058529,
+            "parent": 4058528,
+            "name": "Trưởng thôn Định Thiền",
+            "refCode": "84bfbf6c-0147-1000-eae4-0050568737c9",
+            "refUname": "thondinhthien@vinhthanh.gialai.gov.vn",
+            "refFullname": "Thôn Định Thiền",
+            "type": "alias",
+            "rank": "leader",
+            "order": 0,
+            "config": 0,
+            "office": "N"
+        },
+        {
+            "id": 4058528,
+            "parent": 276,
+            "name": "Các thôn xã Vĩnh Thạnh",
+            "refCode": "84bfbf6c-0147-1000-eae4-0050568737c9",
+            "type": "dept",
+            "order": 0,
+            "config": 0,
+            "office": "N"
+        },
+        {
             "id": 414,
             "parent": 289,
             "name": "Chuyên viên",
@@ -846,6 +908,19 @@
             "refFullname": "Huỳnh Thị Thân",
             "type": "alias",
             "rank": "specialist",
+            "order": 0,
+            "config": 0,
+            "office": "N"
+        },
+        {
+            "id": 4058782,
+            "parent": 4058528,
+            "name": "Trưởng thôn",
+            "refCode": "84c0c086-0147-1000-e62c-0050568737c9",
+            "refUname": "thondinhthanh@vinhthanh.gialai.gov.vn",
+            "refFullname": "Thôn Định Thành",
+            "type": "alias",
+            "rank": "leader",
             "order": 0,
             "config": 0,
             "office": "N"
@@ -1308,6 +1383,19 @@
             "refFullname": "Hồ Thị Minh Nhật",
             "type": "alias",
             "rank": "specialist",
+            "order": 0,
+            "config": 0,
+            "office": "N"
+        },
+        {
+            "id": 4058591,
+            "parent": 4058528,
+            "name": "Trưởng thôn",
+            "refCode": "84bfbfa7-0147-1000-f6f7-0050568737c9",
+            "refUname": "thondinhtri@vinhthanh.gialai.gov.vn",
+            "refFullname": "Thôn Định Trị",
+            "type": "alias",
+            "rank": "leader",
             "order": 0,
             "config": 0,
             "office": "N"
