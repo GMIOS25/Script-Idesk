@@ -4,7 +4,8 @@
   "description": "iDesk RPA Auto-Fill UserScript",
   "type": "module",
   "scripts": {
-    "build": "node build.mjs"
+    "build": "node build.mjs",
+    "build:extension": "node extension/build-extension.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.25.0"
