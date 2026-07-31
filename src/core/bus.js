@@ -18,17 +18,6 @@
 // ==============================================================================
 
 const listeners = {};
-
-export const on = (event, callback) => {
-    if (!listeners[event]) listeners[event] = [];
-    listeners[event].push(callback);
-};
-
-export const off = (event, callback) => {
-    if (!listeners[event]) return;
-    listeners[event] = listeners[event].filter(cb => cb !== callback);
-};
-
-export const emit = (event, payload) => {
-    (listeners[event] || []).forEach(cb => cb(payload));
-};
+export const on = (e, cb) => (listeners[e] = listeners[e] || []).push(cb);
+export const off = (e, cb) => listeners[e] && (listeners[e] = listeners[e].filter(fn => fn !== cb));
+export const emit = (e, data) => (listeners[e] || []).forEach(fn => fn(data));

@@ -1,15 +1,12 @@
 import { S } from '../config.js';
-import { state, setBasePath } from '../state.js';
+import { state } from '../state.js';
 import { appendLog } from './logger.js';
 
 export const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const formatDate = (date) => {
     const d = date || new Date();
-    const dd = String(d.getDate()).padStart(2, '0');
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const yyyy = d.getFullYear();
-    return `${dd}/${mm}/${yyyy}`;
+    return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
 };
 
 export const calcDeadline = (days) => {
@@ -21,18 +18,9 @@ export const calcDeadline = (days) => {
 const ISO_DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const RELATIVE_DAYS_RE = /(\d+)\s*ng[aà]y/i;
 
-// `implementation_deadline` theo docs/en/METADATA_SCHEMA.md (#11) la string | null:
-// uu tien ngay ISO "YYYY-MM-DD" neu van ban co ngay tuyet doi, hoac cau tuong doi
-// da chuan hoa (vd "trong 05 ngay lam viec") neu khong co ngay cu the — KHONG duoc
-// tu bia ngay. Ham nay quy doi ca 2 dang tren ve mot ngay hien thi cu the, dong thoi
-// van chap nhan gia tri la so nguyen (so ngay) de tuong thich nguoc voi mock/BE cu
-// chua tra dung kieu du lieu theo schema.
 export const resolveDeadlineDate = (value) => {
     const result = { dateStr: null, daysNum: null, displayText: '---', raw: value, unparsed: false };
-
-    if (value === null || value === undefined || value === '') {
-        return result;
-    }
+    if (!value && value !== 0) return result;
 
     if (typeof value === 'number' && Number.isFinite(value)) {
         result.daysNum = value;
@@ -63,24 +51,13 @@ export const resolveDeadlineDate = (value) => {
             return result;
         }
 
-        // Cau mo ta khong the tu quy doi ra ngay cu the (vd "sau khi co huong dan moi")
         result.unparsed = true;
         result.displayText = trimmed;
-        return result;
     }
 
     return result;
 };
 
-// Người dùng chỉnh "Hạn thực hiện" từ Card Feed: chỉ được sửa CON SỐ ngày (01-100),
-// không được gõ tự do vào phần mô tả. Hàm này áp số ngày mới vào `implementation_deadline`
-// gốc mà KHÔNG đổi văn phong câu chữ AI trả về:
-//  - Nếu gốc là chuỗi dạng "trong 05 ngày làm việc" -> chỉ thay phần chữ số "05" thành
-//    số mới, giữ nguyên phần còn lại của câu (kể cả cách đệm số 0 nếu gốc có đệm).
-//  - Nếu gốc là số (number), rỗng/null, ngày ISO tuyệt đối, hoặc mô tả không có số
-//    ngày cụ thể (vd "sau khi có hướng dẫn mới") -> không có mẫu câu "N ngày" sẵn để
-//    sửa tại chỗ, nên dựng lại theo đúng mẫu câu chuẩn AI hay trả về:
-//    "trong NN ngày làm việc" (hiển thị thống nhất dù đã gửi AI hay chưa).
 export const applyDeadlineDays = (rawValue, newDays) => {
     const n = Math.round(Number(newDays));
     const clamped = Math.min(100, Math.max(1, Number.isFinite(n) ? n : 1));
@@ -91,17 +68,10 @@ export const applyDeadlineDays = (rawValue, newDays) => {
         const relMatch = trimmed.match(RELATIVE_DAYS_RE);
         if (relMatch) {
             const digits = relMatch[1];
-            const paddedDays = (digits.length > 1 && digits.startsWith('0'))
-                ? String(clamped).padStart(digits.length, '0')
-                : String(clamped);
-            const before = trimmed.slice(0, relMatch.index);
-            const after = trimmed.slice(relMatch.index + relMatch[0].length);
-            const newSegment = relMatch[0].replace(digits, paddedDays);
-            return before + newSegment + after;
+            const padded = (digits.length > 1 && digits.startsWith('0')) ? String(clamped).padStart(digits.length, '0') : String(clamped);
+            return trimmed.slice(0, relMatch.index) + relMatch[0].replace(digits, padded) + trimmed.slice(relMatch.index + relMatch[0].length);
         }
-        return standardTemplate();
     }
-
     return standardTemplate();
 };
 
@@ -111,16 +81,11 @@ export const getVisibleItems = () => {
     return items.filter(el => el.offsetParent !== null);
 };
 
-export const deriveBasePath = (url) => {
-    const m = (url || '').match(/(\/[^\/?]+\/smartcloud)(?=\/)/);
-    return m ? m[1] : null;
-};
-
 export const ensureBasePath = (url) => {
     if (state.basePath) return;
-    const derived = deriveBasePath(url);
-    if (derived) {
-        setBasePath(derived);
+    const m = (url || '').match(/(\/[^\/?]+\/smartcloud)(?=\/)/);
+    if (m && m[1]) {
+        state.basePath = m[1];
         appendLog(`Da xac dinh duong dan goc he thong: ${state.basePath}`);
     }
 };

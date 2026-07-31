@@ -1,5 +1,5 @@
 import { CONFIG } from '../config.js';
-import { docCache, state, setProcessing } from '../state.js';
+import { docCache, state } from '../state.js';
 import { setStatus, appendLog } from '../utils/logger.js';
 import { sleep, applyDeadlineDays } from '../utils/helpers.js';
 import { ensureDocDetails } from '../services/api.js';
@@ -23,7 +23,7 @@ export const scanAndSendAll = async () => {
         return;
     }
 
-    setProcessing(true);
+    state.isProcessing = true;
     let success = 0, errors = 0;
     const total = pendingIds.length;
     updateProgress(0, total);
@@ -84,7 +84,7 @@ export const scanAndSendAll = async () => {
         if (i < pendingIds.length - 1) await sleep(CONFIG.DELAY_MS.BETWEEN_AI_CALLS);
     }
 
-    setProcessing(false);
+    state.isProcessing = false;
     setStatus(`Hoan tat AI: ${success} thanh cong, ${errors} loi`);
     updateProgress(total, total);
 };
@@ -95,7 +95,7 @@ export const runFillOnAll = async () => {
     const checkboxes = document.querySelectorAll('.rpa-row-check:checked');
     if (checkboxes.length === 0) return alert('Hay chon it nhat 1 van ban!');
 
-    setProcessing(true);
+    state.isProcessing = true;
     let success = 0, errors = 0;
     const total = checkboxes.length;
     updateProgress(0, total);
@@ -128,7 +128,7 @@ export const runFillOnAll = async () => {
         await sleep(CONFIG.DELAY_MS.BETWEEN_DOCS);
     }
 
-    setProcessing(false);
+    state.isProcessing = false;
     setStatus(`Ket thuc tu dong dien: ${success}/${total} thanh cong`);
     updateProgress(total, total);
 };

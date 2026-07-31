@@ -1,5 +1,5 @@
 import { CONFIG } from '../config.js';
-import { docCache, unitCache, state, setExecAcode } from '../state.js';
+import { docCache, unitCache, state } from '../state.js';
 import { appendLog } from '../utils/logger.js';
 import { sleep, ensureBasePath, getFallbackBasePath } from '../utils/helpers.js';
 import { emit } from '../core/bus.js';
@@ -46,7 +46,6 @@ export const handleViewResponse = (data) => {
     doc.book = data.book || doc.book || null;
 
     docCache.set(id, doc);
-    updateExecAcodeFromView(data, doc.responsibility);
     emit('docs-changed');
 };
 
@@ -56,42 +55,13 @@ export const handleUnitsResponse = (data) => {
     appendLog(`API fbyvsphere: Cap nhat ${data.elements.length} don vi/ca nhan xu ly`);
 };
 
-// Cách bắt exeacode ĐƠN GIẢN VÀ CHẮC CHẮN HƠN updateExecAcodeFromView() bên dưới:
-// giá trị exeacode do CHÍNH TRANG WEB gắn vào query string của MỌI request
-// view.cpx (vd "view.cpx?exeacode=b3c5c53e-...&id=..."), lặp lại y hệt nhau ở
-// nhiều văn bản khác nhau — tức đây là mã định danh CỦA NGƯỜI ĐANG ĐĂNG NHẬP,
-// không phụ thuộc văn bản đó là "chính" hay "phối hợp" như cách suy ra từ
-// senders/proInfos. Được gọi ngay khi intercept thấy URL view.cpx (interceptor.js),
-// không cần đợi/parse response.
+// Bắt exeacode trực tiếp từ URL query string của request view.cpx.
 export const captureExecAcodeFromUrl = (url) => {
     if (state.execAcode || !url) return;
     const match = url.match(/[?&]exeacode=([^&]+)/);
     if (match && match[1]) {
-        setExecAcode(decodeURIComponent(match[1]));
+        state.execAcode = decodeURIComponent(match[1]);
         appendLog(`Da xac dinh ma dinh danh xu ly (exeacode) tu URL view.cpx: ${state.execAcode}`);
-    }
-};
-
-export const updateExecAcodeFromView = (data, viewerResponsibility) => {
-    if (state.execAcode) return;
-
-    // QUAN TRONG: senders/proInfos la LICH SU LUAN CHUYEN cua van ban (nhieu buoc,
-    // nhieu nguoi), entry co responsibility === 'main' trong do CHUA CHAC la chinh
-    // nguoi dang dang nhap — no co the la nguoi khac (vd van ban nay minh chi la
-    // "phoi hop"/coordinate, con "main" thuc su la mot dong nghiep khac). Lay nham
-    // receiverAcode cua nguoi khac se lam fbyvsphere.cpx tra loi
-    // "alias_do_not_match_for_login_user". Chi tin cay ket qua khi CHINH van ban
-    // nay, o cap do qsprocess.cpx (doc.responsibility), da xac nhan nguoi dang xem
-    // la "main" — luc do entry main trong senders/proInfos moi chac chan la chinh minh.
-    if (viewerResponsibility !== 'main') return;
-
-    const pool = [];
-    if (Array.isArray(data.senders)) pool.push(...data.senders);
-    if (Array.isArray(data.proInfos)) pool.push(...data.proInfos);
-    const mainEntry = pool.find(e => e && e.responsibility === 'main' && e.receiverAcode);
-    if (mainEntry) {
-        setExecAcode(mainEntry.receiverAcode);
-        appendLog(`Da xac dinh ma dinh danh xu ly (exeacode): ${state.execAcode}`);
     }
 };
 

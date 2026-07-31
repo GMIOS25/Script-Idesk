@@ -1,22 +1,10 @@
 import { CONFIG } from '../config.js';
-import { state, setCachedAuthToken } from '../state.js';
+import { state } from '../state.js';
 import { setStatus, appendLog } from '../utils/logger.js';
 import { getFallbackBasePath, sleep, toISODateOnly } from '../utils/helpers.js';
 import { selectAttachment } from '../utils/attachment.js';
 
-// Doc header tra ve tu GM_xmlhttpRequest la 1 chuoi tho "Key: Value\r\n..."
-const parseResponseHeaders = (rawHeaders) => {
-    const headers = {};
-    (rawHeaders || '').split('\r\n').forEach((line) => {
-        const idx = line.indexOf(':');
-        if (idx > -1) {
-            const key = line.slice(0, idx).trim().toLowerCase();
-            const val = line.slice(idx + 1).trim();
-            if (key) headers[key] = val;
-        }
-    });
-    return headers;
-};
+const parseResponseHeaders = (raw) => Object.fromEntries((raw || '').split('\r\n').map(l => l.split(': ')).filter(p => p[1]));
 
 // Doc payload loi chuan theo docs/en/docflow.md muc 9: { error: { code, message, detail } }
 const parseErrorPayload = (resp) => {
@@ -69,8 +57,7 @@ export const getAuthToken = () => {
                 if (resp.status === 200) {
                     try {
                         const res = JSON.parse(resp.responseText);
-                        const token = res.access_token || '';
-                        setCachedAuthToken(token);
+                        state.cachedAuthToken = res.access_token || '';
                         appendLog('Da lay Auth Token tu Backend');
                     } catch (e) {}
                 }

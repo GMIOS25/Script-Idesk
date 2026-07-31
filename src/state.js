@@ -1,16 +1,10 @@
-export const docCache = new Map();     // Map<id, DocObject>
-export const unitCache = new Map();    // Map<id, UnitObject> (từ fbyvsphere.cpx)
+export const docCache = new Map();
+export const unitCache = new Map();
 
 export const state = {
     isProcessing: false,
-    basePath: '',      // vd: "/cumvinhthanh/smartcloud"
-    execAcode: '',     // receiverAcode của người đăng nhập
+    basePath: '',
+    execAcode: '',
     cachedAuthToken: '',
-    unitsPrimed: false // true khi đã lấy được cây đơn vị (fbyvsphere.cpx) cho phiên hiện tại
+    unitsPrimed: false
 };
-
-export const setProcessing = (val) => { state.isProcessing = val; };
-export const setBasePath = (path) => { state.basePath = path; };
-export const setExecAcode = (code) => { state.execAcode = code; };
-export const setCachedAuthToken = (token) => { state.cachedAuthToken = token; };
-export const setUnitsPrimed = (val) => { state.unitsPrimed = val; };
