@@ -1,14 +1,14 @@
 export const CONFIG = {
-    BACKEND_URL: 'http://localhost:5000/documents/process',
-    LOOKUP_URL: 'http://localhost:5000/documents/lookup',
-    PATCH_URL_BASE: 'http://localhost:5000/documents',
-    AUTH_URL: 'http://localhost:5000/auth/token',
+    BACKEND_URL: 'https://api.truyenthanh755.xyz/api/v1/documents/process',
+    LOOKUP_URL: 'https://api.truyenthanh755.xyz/api/v1/documents/lookup',
+    PATCH_URL_BASE: 'https://api.truyenthanh755.xyz/api/v1/documents',
+    AUTH_URL: 'https://api.truyenthanh755.xyz/api/v1/auth/token',
     // docs/en/docflowv2.md muc 6-7: xin URL tam de day file PDF that len truoc khi
     // goi /documents/process, thay cho viec gui thang link noi bo iDesk (yeu cau
     // cookie phien dang nhap -> AI backend that khong tai duoc, xem docs/changes/
     // De_xuat_presigned_url.md). "upload_url" tra ve tu presign da la URL day du,
     // FE khong tu ghep them nen khong can them 1 base URL rieng cho buoc upload.
-    PRESIGN_URL: 'http://localhost:5000/files/presign',
+    PRESIGN_URL: 'https://api.truyenthanh755.xyz/api/v1/files/presign',
     // Backoff cho 429 RATE_LIMITED / 503 SERVER_BUSY (docs/en/docflow.md muc 10)
     RETRY: {
         MAX_ATTEMPTS: 3,
