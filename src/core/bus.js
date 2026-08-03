@@ -6,8 +6,8 @@
 // Muốn giao tiếp 2 chiều thì dùng on()/emit() ở đây.
 //
 // Các event đang dùng trong dự án (cập nhật danh sách này khi thêm event mới):
-//   - 'scan-requested'        : UI báo người dùng bấm nút "Quét & Gửi AI"
-//   - 'fill-requested'        : UI báo người dùng bấm nút "Tự động điền"
+//   - 'scan-requested'        : UI báo người dùng bấm nút "Gửi AI"
+//   - 'fill-requested'        : UI báo người dùng bấm nút "Duyệt"
 //   - 'docs-changed'          : Logic báo docCache vừa thay đổi, UI cần render lại danh sách
 //   - 'progress'              : Logic báo tiến độ xử lý { current, total }, UI cập nhật progress bar
 //   - 'unit-remove-requested' : UI báo người dùng bấm "×" trên 1 chip đơn vị { id, kind: 'main'|'co', value? }

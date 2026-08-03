@@ -27,18 +27,18 @@ export const createDashboard = () => {
         </div>
         <div class="rpa-body">
             <div class="rpa-toolbar">
-                <button class="rpa-btn rpa-btn-primary" id="rpa-btn-scan">Quét &amp; Gửi AI</button>
-                <button class="rpa-btn rpa-btn-purple" id="rpa-btn-fill-all">Tự động điền</button>
+                <button class="rpa-btn rpa-btn-primary" id="rpa-btn-scan">Gửi AI</button>
+                <button class="rpa-btn rpa-btn-purple" id="rpa-btn-fill-all">Duyệt</button>
             </div>
             <div class="rpa-feed-wrap">
                 <div class="rpa-card-feed" id="rpa-card-feed">
-                    <div class="rpa-empty-state">Nhấn "Quét &amp; Gửi AI" để bắt đầu...</div>
+                    <div class="rpa-empty-state">Nhấn "Gửi AI" để bắt đầu...</div>
                 </div>
             </div>
             <div class="rpa-log-panel" id="rpa-log-panel"><div id="rpa-log-body"></div></div>
         </div>
         <div class="rpa-footer">
-            <span class="rpa-status-text" id="rpa-footer-status">Sẵn sàng. Nhấn "Quét &amp; Gửi AI" để bắt đầu.</span>
+            <span class="rpa-status-text" id="rpa-footer-status">Sẵn sàng. Nhấn "Gửi AI" để bắt đầu.</span>
             <div class="rpa-progress-wrap">
                 <span class="rpa-progress-text" id="rpa-progress-text">0/0</span>
                 <div class="rpa-progress-bar"><div class="rpa-progress-fill" id="rpa-progress-fill"></div></div>
@@ -145,7 +145,7 @@ export const updateDashboard = () => {
     if (countEl) countEl.textContent = docCache.size.toString();
 
     if (docCache.size === 0) {
-        cardFeed.innerHTML = `<div class="rpa-empty-state">Nhấn "Quét & Gửi AI" để bắt đầu...</div>`;
+        cardFeed.innerHTML = `<div class="rpa-empty-state">Nhấn "Gửi AI" để bắt đầu...</div>`;
         return;
     }
 
