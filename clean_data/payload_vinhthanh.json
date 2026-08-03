@@ -1442,12 +1442,12 @@
         {
             "id": 8426,
             "parent": 7778,
-            "name": "Chuyên viên",
+            "name": "Phó giám đốc",
             "refCode": "bb7c7c00-0146-1000-ebb6-0050568737c9",
             "refUname": "thaodtt@vinhthanh.gialai.gov.vn",
             "refFullname": "Đặng Thị Thanh Thảo",
             "type": "alias",
-            "rank": "specialist",
+            "rank": "leader",
             "order": 0,
             "config": 0,
             "office": "N"
