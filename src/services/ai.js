@@ -52,7 +52,7 @@ export const getAuthToken = () => {
             method: 'POST',
             url: CONFIG.AUTH_URL,
             headers: { 'Content-Type': 'application/json' },
-            data: JSON.stringify({ username: 'Docflow', password: '2aRfs7AzFS43m6mxCAfcNsBa-Q42P8DT' }),
+            data: JSON.stringify({ username: 'fe-server-prod', password: 'secret_password' }),
             onload: (resp) => {
                 if (resp.status === 200) {
                     try {
