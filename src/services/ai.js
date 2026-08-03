@@ -17,6 +17,19 @@ const parseErrorPayload = (resp) => {
     return { code: null, message: resp.responseText || `HTTP ${resp.status}`, detail: null };
 };
 
+// docs/en/docflowv2.md muc 1: "Moi response deu co header X-Request-Id ... Khi
+// bao loi, gui gia tri nay de doi chieu log." Truoc day chi callAIBackendOnce()
+// (goi /documents/process) doc va gan header nay vao message loi; cac endpoint
+// con lai (presign, upload, lookup, patch) bo qua hoan toan header response nen
+// log loi cua chung khong doi chieu duoc voi server. Gom logic doc header ve 1
+// cho de moi endpoint deu dinh kem request id giong nhau khi bao loi.
+const extractRequestId = (resp) => parseResponseHeaders(resp.responseHeaders)['x-request-id'] || null;
+
+const requestIdSuffix = (resp) => {
+    const id = extractRequestId(resp);
+    return id ? ` [X-Request-Id: ${id}]` : '';
+};
+
 const RETRYABLE_STATUS = new Set([429, 503]);
 
 export const downloadPDF = (contentUid, fileName) => {
@@ -92,7 +105,7 @@ const presignFileOnce = (pdfFile, token) => {
                     return;
                 }
                 const errPayload = parseErrorPayload(resp);
-                resolve({ ok: false, retryable: RETRYABLE_STATUS.has(resp.status), status: resp.status, error: new Error(`Presign HTTP ${resp.status} (${errPayload.code || '?'}): ${errPayload.message}`) });
+                resolve({ ok: false, retryable: RETRYABLE_STATUS.has(resp.status), status: resp.status, error: new Error(`Presign HTTP ${resp.status} (${errPayload.code || '?'}): ${errPayload.message}${requestIdSuffix(resp)}`) });
             },
             onerror: () => resolve({ ok: false, retryable: true, error: new Error('Khong ket noi duoc /files/presign') }),
             ontimeout: () => resolve({ ok: false, retryable: true, error: new Error('Timeout goi /files/presign') })
@@ -120,7 +133,7 @@ const uploadFileOnce = (uploadUrl, uploadHeaders, pdfFile, token) => {
                     return;
                 }
                 const errPayload = parseErrorPayload(resp);
-                resolve({ ok: false, retryable: RETRYABLE_STATUS.has(resp.status), status: resp.status, error: new Error(`Upload HTTP ${resp.status} (${errPayload.code || '?'}): ${errPayload.message}`) });
+                resolve({ ok: false, retryable: RETRYABLE_STATUS.has(resp.status), status: resp.status, error: new Error(`Upload HTTP ${resp.status} (${errPayload.code || '?'}): ${errPayload.message}${requestIdSuffix(resp)}`) });
             },
             onerror: () => resolve({ ok: false, retryable: true, error: new Error('Khong ket noi duoc /files/upload') }),
             ontimeout: () => resolve({ ok: false, retryable: true, error: new Error('Timeout PUT /files/upload') })
@@ -177,9 +190,6 @@ const callAIBackendOnce = (doc, payload, token) => {
             headers: headers,
             data: JSON.stringify(payload),
             onload: (resp) => {
-                const respHeaders = parseResponseHeaders(resp.responseHeaders);
-                const requestId = respHeaders['x-request-id'] || null;
-
                 if (resp.status === 200) {
                     try {
                         const result = JSON.parse(resp.responseText);
@@ -193,8 +203,7 @@ const callAIBackendOnce = (doc, payload, token) => {
                 }
 
                 const errPayload = parseErrorPayload(resp);
-                const reqIdSuffix = requestId ? ` [X-Request-Id: ${requestId}]` : '';
-                const err = new Error(`Backend HTTP ${resp.status} (${errPayload.code || '?'}): ${errPayload.message}${reqIdSuffix}`);
+                const err = new Error(`Backend HTTP ${resp.status} (${errPayload.code || '?'}): ${errPayload.message}${requestIdSuffix(resp)}`);
                 resolve({ ok: false, retryable: RETRYABLE_STATUS.has(resp.status), status: resp.status, error: err });
             },
             onerror: () => resolve({ ok: false, retryable: true, error: new Error(`Khong ket noi duoc AI (${CONFIG.BACKEND_URL})`) }),
@@ -292,7 +301,7 @@ export const lookupDocument = async (doc) => {
                     }
                 } else {
                     const errPayload = parseErrorPayload(resp);
-                    reject(new Error(`Lookup HTTP ${resp.status} (${errPayload.code || '?'}): ${errPayload.message}`));
+                    reject(new Error(`Lookup HTTP ${resp.status} (${errPayload.code || '?'}): ${errPayload.message}${requestIdSuffix(resp)}`));
                 }
             },
             onerror: () => reject(new Error('Khong ket noi duoc /documents/lookup')),
@@ -338,7 +347,7 @@ export const patchDocument = async (stt, fields) => {
                     }
                 } else {
                     const errPayload = parseErrorPayload(resp);
-                    reject(new Error(`Patch HTTP ${resp.status} (${errPayload.code || '?'}): ${errPayload.message}`));
+                    reject(new Error(`Patch HTTP ${resp.status} (${errPayload.code || '?'}): ${errPayload.message}${requestIdSuffix(resp)}`));
                 }
             },
             onerror: () => reject(new Error(`Khong ket noi duoc PATCH /documents/${stt}`)),
