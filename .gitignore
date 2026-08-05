@@ -13,5 +13,4 @@ temppararell/
 bruno_api_tests/
 
 #Enviroment variable
-.env
-.env.local
+.env*
