@@ -1,0 +1,44 @@
+{
+    "attributes": [
+        {
+            "name": "url",
+            "value": "system/userprofile/photo",
+            "group": "image"
+        }
+    ],
+    "user": {
+        "birthday": 0,
+        "country": "VN",
+        "code": "luantb@vinhthanh.gialai.gov.vn",
+        "city": "",
+        "timezone": "Asia/Ho_Chi_Minh",
+        "latitude": 0,
+        "postalCode": "",
+        "language": "vi",
+        "mname": "Bảo",
+        "title": "",
+        "lname": "Luân",
+        "state": "",
+        "email": "support@gialai.gov.vn",
+        "group": [],
+        "longitude": 0,
+        "brief": "",
+        "fname": "Trịnh",
+        "address": "",
+        "forward": "",
+        "sex": "",
+        "avataUrl": "",
+        "phone": "",
+        "organization": "",
+        "fullname": "Trịnh Bảo Luân",
+        "secureTicket": "",
+        "username": "luantb@vinhthanh.gialai.gov.vn",
+        "password": "INTERNAL"
+    },
+    "totp": {
+        "keyBase64": "MQAG/w4VROZJh3QvuglTH/HAyvjuK44uqJ99Qd2DyQQ=",
+        "zoneId": "Asia/Ho_Chi_Minh",
+        "passwordLength": 6,
+        "algorithm": "HmacSHA256"
+    }
+}
