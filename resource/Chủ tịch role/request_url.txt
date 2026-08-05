@@ -4,4 +4,6 @@ https://vpdt.gialai.gov.vn/*/smartcloud/document/edocs/qsprocess.cpx | POST | L�
 
 https://vpdt.gialai.gov.vn/*/smartcloud/document/edocs/view.cpx?exeacode={{receiverAcode}}&id={{id}}&responsibility=main | GET | Xem chi tiết nội dung văn bản (view.cpx) Với receiverAcodeAcode và id được lấy từ danh sách văn bản (qsprocess.cpx)
 
-https://vpdt.gialai.gov.vn/*/smartcloud/docx/download.cpx?docID={{contentUid}}&amp;view=pdf&amp;t={{cái dãy số gì đó tôi không biết}} : Đây là đường link tải tài liệu chính về.
+https://vpdt.gialai.gov.vn/*/smartcloud/system/userprofile/view.cpx | GET | API lấy thông tin của tài khoản người dùng (đã đăng nhập). (view.json)
+
+https://vpdt.gialai.gov.vn/*/smartcloud/docx/download.cpx?docID={{contentUid}}&amp;view=pdf&amp;t={{cái dãy số gì đó tôi không biết}} | GET | Đây là đường link tải tài liệu chính về.

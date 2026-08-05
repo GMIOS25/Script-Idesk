@@ -11,3 +11,7 @@ temppararell/
 
 #Thư mục test api
 bruno_api_tests/
+
+#Enviroment variable
+.env
+.env.local
