@@ -2,8 +2,35 @@ import * as esbuild from 'esbuild';
 import fs from 'fs';
 import path from 'path';
 
+function loadEnv() {
+    const envPath = path.join(process.cwd(), '.env');
+    const envVars = {};
+    if (fs.existsSync(envPath)) {
+        const content = fs.readFileSync(envPath, 'utf-8');
+        for (const line of content.split(/\r?\n/)) {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith('#')) continue;
+            const eqIdx = trimmed.indexOf('=');
+            if (eqIdx > 0) {
+                const key = trimmed.slice(0, eqIdx).trim();
+                let val = trimmed.slice(eqIdx + 1).trim();
+                if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+                    val = val.slice(1, -1);
+                }
+                envVars[key] = val;
+            }
+        }
+    }
+    return envVars;
+}
+
 async function build() {
     const metaContent = fs.readFileSync(path.join(process.cwd(), 'src', 'meta.js'), 'utf-8');
+    const envVars = loadEnv();
+
+    const authBaseUrl = process.env.AUTH_BASE_URL || envVars.AUTH_BASE_URL || 'http://localhost:5000';
+    const authUsername = process.env.AUTH_USERNAME || envVars.AUTH_USERNAME || 'fe-server-prod';
+    const authPassword = process.env.AUTH_PASSWORD || envVars.AUTH_PASSWORD || 'secret_password';
 
     const result = await esbuild.build({
         entryPoints: ['src/index.js'],
@@ -11,7 +38,12 @@ async function build() {
         write: false,
         format: 'iife',
         minify: false,
-        target: 'es2020'
+        target: 'es2020',
+        define: {
+            'process.env.AUTH_BASE_URL': JSON.stringify(authBaseUrl),
+            'process.env.AUTH_USERNAME': JSON.stringify(authUsername),
+            'process.env.AUTH_PASSWORD': JSON.stringify(authPassword)
+        }
     });
 
     const code = result.outputFiles[0].text;

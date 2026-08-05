@@ -52,7 +52,7 @@ export const getAuthToken = () => {
             method: 'POST',
             url: CONFIG.AUTH_URL,
             headers: { 'Content-Type': 'application/json' },
-            data: JSON.stringify({ username: 'fe-server-prod', password: 'secret_password' }),
+            data: JSON.stringify({ username: CONFIG.AUTH_USERNAME, password: CONFIG.AUTH_PASSWORD }),
             onload: (resp) => {
                 if (resp.status === 200) {
                     try {
