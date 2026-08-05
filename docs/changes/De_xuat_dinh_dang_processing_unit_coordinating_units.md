@@ -1,8 +1,8 @@
-# Đề xuất chuẩn hóa định dạng chuỗi trong `processing_unit` và `coordinating_units`
+# Đề xuất chuẩn hóa định dạng chuỗi trong `processing_unit`, `coordinating_units` và `monitoring_leader`
 
 **Trạng thái:** Đề xuất, chờ backend xác nhận
 **Liên quan:** `docs/en/docflow.md` mục 4, 5, 6 — `POST /documents/process`, `POST /documents/lookup`, `PATCH /documents/{stt}`
-**Không đổi:** kiểu dữ liệu hiện tại (`processing_unit: string|null`, `coordinating_units: List<string>`), tên field, endpoint, ràng buộc độ dài/số lượng phần tử
+**Không đổi:** kiểu dữ liệu hiện tại (`processing_unit: string|null`, `coordinating_units: List<string>`, `monitoring_leader: string|null`), tên field, endpoint, ràng buộc độ dài/số lượng phần tử
 
 ## 1. Vấn đề hiện tại
 
@@ -17,7 +17,7 @@ Nếu backend chỉ trả `name` (ví dụ chỉ `"Văn thư"`) mà thiếu ph�
 
 ## 2. Hướng giải quyết
 
-Backend áp dụng đúng quy tắc hiển thị mà iDesk đang dùng trên cây tổ chức thật khi sinh chuỗi cho `processing_unit` và từng phần tử trong `coordinating_units`:
+Backend áp dụng đúng quy tắc hiển thị mà iDesk đang dùng trên cây tổ chức thật khi sinh chuỗi cho `processing_unit`, `monitoring_leader` và từng phần tử trong `coordinating_units`:
 
 | `type` trong cây tổ chức                   | Định dạng chuỗi trả về            | Ví dụ                                                                  |
 | ------------------------------------------ | --------------------------------- | ---------------------------------------------------------------------- |
@@ -25,9 +25,10 @@ Backend áp dụng đúng quy tắc hiển thị mà iDesk đang dùng trên câ
 | `unit` (đơn vị cấp trên/cây gốc)           | `name`                            | `"UBND Xã Vĩnh Thạnh - Tỉnh Gia Lai"`                                  |
 | `alias` (chức danh gắn với 1 người cụ thể) | `name + " (" + refFullname + ")"` | `"Văn thư (Văn thư phòng Kinh tế)"`, `"Chủ tịch UBND (Lê Minh Thông)"` |
 
-Áp dụng cho cả hai trường:
+Áp dụng cho cả ba trường:
 
-- `processing_unit`: một chuỗi duy nhất, theo đúng bảng trên tùy loại đối tượng được chọn làm đơn vị chủ trì.
+- `processing_unit`: một chuỗi duy nhất (hoặc null), theo đúng bảng trên tùy loại đối tượng được chọn làm đơn vị chủ trì.
+- `monitoring_leader`: một chuỗi duy nhất (hoặc null), theo đúng bảng trên tùy loại đối tượng được chọn làm lãnh đạo theo dõi.
 - `coordinating_units`: mỗi phần tử trong list áp dụng đúng quy tắc trên (list có thể trộn lẫn cả `dept`/`unit`/`alias`, không cần cùng loại).
 
 ## 3. Ví dụ before/after
@@ -37,7 +38,8 @@ Backend áp dụng đúng quy tắc hiển thị mà iDesk đang dùng trên câ
 ```json
 {
   "processing_unit": "Phòng Tổng hợp",
-  "coordinating_units": ["Đơn vị B", "Đơn vị C"]
+  "coordinating_units": ["Đơn vị B", "Đơn vị C"],
+  "monitoring_leader": "Chủ tịch UBND"
 }
 ```
 
@@ -49,11 +51,12 @@ Backend áp dụng đúng quy tắc hiển thị mà iDesk đang dùng trên câ
   "coordinating_units": [
     "Phòng Văn hóa - Xã hội",
     "Văn thư (Văn thư phòng Kinh tế)"
-  ]
+  ],
+  "monitoring_leader": "Chủ tịch UBND (Lê Minh Thông)"
 }
 ```
 
-`"Phòng Kinh tế..."` và `"Phòng Văn hóa..."` là type `dept` → giữ nguyên `name`. `"Văn thư (Văn thư phòng Kinh tế)"` là type `alias` → bắt buộc kèm `refFullname` để phân biệt với các "Văn thư" khác trong hệ thống.
+`"Phòng Kinh tế..."` và `"Phòng Văn hóa..."` là type `dept` → giữ nguyên `name`. `"Văn thư (Văn thư phòng Kinh tế)"` và `"Chủ tịch UBND (Lê Minh Thông)"` là type `alias` → bắt buộc kèm `refFullname` để phân biệt với các chức danh trùng tên khác trong hệ thống.
 
 ## 4. Tài liệu tham khảo / mock đã hiện thực sẵn
 
@@ -65,7 +68,7 @@ Nguồn dữ liệu gốc (tên/refFullname/type thật của từng phòng ban,
 
 **Backend:**
 
-- Khi sinh giá trị cho `processing_unit`/`coordinating_units`, tra `type` của đối tượng được chọn và áp đúng quy tắc format ở mục 2.
+- Khi sinh giá trị cho `processing_unit`/`coordinating_units`/`monitoring_leader`, tra `type` của đối tượng được chọn và áp đúng quy tắc format ở mục 2.
 - Cập nhật lại các ví dụ trong `docs/en/docflow.md` mục 4, 5, 6 để không còn placeholder mơ hồ (`"Phòng Tổng hợp"`, `"Đơn vị B"`...) khiến hiểu nhầm đây là chuỗi tự do, không theo cấu trúc cây tổ chức.
 - Không cần đổi kiểu dữ liệu, không phát sinh field mới — chỉ chuẩn hóa nội dung chuỗi.
 
