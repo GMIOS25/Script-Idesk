@@ -27,7 +27,11 @@ Hanh vi loi (docs/en/docflow.md muc 9-10):
 - Vuot rate limit -> 429 `RATE_LIMITED`; qua so job OCR/AI dong thoi -> 503
   `SERVER_BUSY`.
 - Co the ep loi thu cong de FE/QA test cac nhanh nay bang header:
-    X-Mock-Force-Error: RATE_LIMITED | SERVER_BUSY | VALIDATION
+    X-Mock-Force-Error: RATE_LIMITED | SERVER_BUSY | VALIDATION | NOT_COMPLETED
+  (NOT_COMPLETED chi ap dung cho PATCH /documents/<stt> - xem muc 6b ben duoi:
+  mock nay xu ly /documents/process dong bo nen khong tu nhien co van ban o
+  trang thai "processing" giua 2 request de test nhanh 409 DOCUMENT_NOT_COMPLETED,
+  phai ep bang header).
 """
 
 import sys
@@ -1022,6 +1026,27 @@ def lookup_document():
     }), 200
 
 # ----------------------------------------------------
+# 6b. PATCH /documents/<stt> — nhanh loi 409 DOCUMENT_NOT_COMPLETED
+#     (docs/en/docflowv2.md muc 11) truoc day chua duoc hien thuc: mock nay xu
+#     ly /documents/process HOAN TOAN DONG BO nen mot van ban da nam trong
+#     PROCESSED_DOCS/SAMPLE_RESPONSES la coi nhu "completed" ngay, khong bao
+#     gio tu nhien roi vao trang thai "processing" giua 2 request de FE/QA
+#     bat gap 409. Cho phep ep bang header X-Mock-Force-Error: NOT_COMPLETED
+#     de van co the kiem thu duoc nhanh nay ma khong can dung toi mot hang doi
+#     xu ly bat dong bo that su.
+# ----------------------------------------------------
+def _forced_not_completed():
+    forced = (request.headers.get('X-Mock-Force-Error') or '').strip().upper()
+    if forced == 'NOT_COMPLETED':
+        return _error_response(
+            'DOCUMENT_NOT_COMPLETED',
+            'Van ban chua xu ly xong, chua sua duoc (ep buoc de test)',
+            409
+        )
+    return None
+
+
+# ----------------------------------------------------
 # 6. PATCH /documents/<stt>
 # ----------------------------------------------------
 @app.route('/documents/<int:stt>', methods=['PATCH'])
@@ -1029,6 +1054,9 @@ def patch_document(stt):
     forced = _forced_error()
     if forced:
         return forced
+    forced_not_completed = _forced_not_completed()
+    if forced_not_completed:
+        return forced_not_completed
     if not _check_rate_limit(_client_key('patch')):
         return _error_response('RATE_LIMITED', 'Qua tan suat cho phep, vui long thu lai sau', 429)
 
