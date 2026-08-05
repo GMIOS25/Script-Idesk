@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 
 function loadEnv() {
-    const envPath = path.join(process.cwd(), '.env');
+    const envPath = path.join(process.cwd(), '.env.local');
     const envVars = {};
     if (fs.existsSync(envPath)) {
         const content = fs.readFileSync(envPath, 'utf-8');
