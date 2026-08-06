@@ -58,6 +58,33 @@ export const autoFillAndSubmit = async (docId, aiData) => {
         }
     }
 
+    // `monitoring_leader` theo docs/en/METADATA_SCHEMA.md (#10) la string | null - MOT
+    // lanh dao duy nhat duoc chon lam nguoi theo doi (khac coordinating_units la mang
+    // nhieu don vi phoi hop). Khac voi 2 truong tren, khoi field nay MAC DINH BI AN
+    // tren form that (div[data-role="follow"], class "hide") - chi hien ra sau khi
+    // bam lien ket S.FOLLOW_TOGGLE_BTN (xem resource/"Van thu role" vs resource/
+    // "Chu tich role" trong right_panel_after_save_and_transfer.html: cung 1 element,
+    // khac trang thai an/hien va chu link "Thêm người theo dõi" <-> "Ẩn người theo dõi").
+    // CHI bam nut nay va dien khi AI thuc su tra ve gia tri (!= null/rong) - neu AI
+    // khong co bang chung trong van ban, GIU NGUYEN trang thai an mac dinh cua form,
+    // khong tu y bam mo.
+    const monitoringLeader = aiData.monitoring_leader;
+    if (monitoringLeader && monitoringLeader.trim()) {
+        const followWrap = document.querySelector(S.FOLLOW_WRAP);
+        const isFollowHidden = !followWrap || followWrap.offsetParent === null;
+        if (isFollowHidden) {
+            const followToggleBtn = document.querySelector(S.FOLLOW_TOGGLE_BTN);
+            if (followToggleBtn) {
+                followToggleBtn.click();
+                await sleep(CONFIG.DELAY_MS.TOGGLE_FOLLOW);
+            } else {
+                appendLog('Khong tim thay nut "Ẩn/Thêm người theo dõi" (S.FOLLOW_TOGGLE_BTN)');
+            }
+        }
+        appendLog(`Lanh dao theo doi: ${monitoringLeader}`);
+        await selectTreeItem(S.FOLLOW_LINK, S.FOLLOW_WRAP, monitoringLeader.trim());
+    }
+
     // `implementation_deadline` theo docs/en/METADATA_SCHEMA.md (#11) la string | null
     // (ISO date hoac cau tuong doi da chuan hoa), khong phai luon la so ngay. Ham
     // resolveDeadlineDate() xu ly ca 2 dang do, cong voi so nguyen de tuong thich

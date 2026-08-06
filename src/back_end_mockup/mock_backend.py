@@ -324,6 +324,24 @@ def _random_processing_and_coordinating_units():
     return processing_unit, coordinating_units
 
 
+def _random_monitoring_leader():
+    """Sinh ngau nhien 1 gia tri monitoring_leader tu ORG_SAMPLE_ELEMENTS, dung
+    cho cac van ban KHONG khop mau nao trong SAMPLE_RESPONSES — cung muc dich
+    voi _random_processing_and_coordinating_units() o tren, de FE/QA co the
+    kiem tra tinh nang thêm/sửa "Lãnh đạo theo dõi" (giống hệt "Đơn vị xử lý
+    chính") voi du lieu bam sat dinh dang tag that ("name (refFullname)")
+    thay vi 1 chuoi tu do co dinh khong khop bat ky phan tu nao trong cay
+    to chuc that (fbyvsphere.cpx).
+
+    `monitoring_leader` la 1 LANH DAO duy nhat (xem docs/en/METADATA_SCHEMA.md
+    #10 va patch feat auto-fill monitoring_leader) nen chi chon trong nhom
+    "alias" (chuc danh gan voi 1 nguoi cu the), khong chon dept/unit nhu
+    processing_unit/coordinating_units.
+    """
+    key = random.choice(_ALIAS_KEYS)
+    return _org_tag_label(key)
+
+
 def _org_tag_label(key):
     """Tra ve chuoi hien thi tren tag dung quy tac:
     - dept/unit -> name
@@ -341,9 +359,14 @@ def _org_tag_label(key):
 #    KHONG co truong `priority` (khong nam trong 13 cot cong khai — schema AI
 #    output dung extra="forbid" nen BE that se reject/khong bao gio tra field nay).
 #
-#    `processing_unit` va `coordinating_units` duoc gan bang _org_tag_label()
-#    tu ORG_SAMPLE_ELEMENTS o tren, phu du 3 to hop de QA/FE kiem tra viec
-#    dien tag: dept-only, dept+alias, va unit/alias.
+#    `processing_unit`, `coordinating_units` va `monitoring_leader` deu duoc gan
+#    bang _org_tag_label() tu ORG_SAMPLE_ELEMENTS o tren (dung dinh dang de xuat
+#    trong docs/changes/De_xuat_dinh_dang_processing_unit_coordinating_units.md
+#    muc 2: dept/unit -> name, alias -> "name (refFullname)"), phu du 3 to hop de
+#    QA/FE kiem tra viec dien tag: dept-only, dept+alias, va unit/alias.
+#    `monitoring_leader` luon lay tu nhom alias (mot lanh dao/chuc danh duy nhat,
+#    xem docs/en/METADATA_SCHEMA.md #10), khac processing_unit/coordinating_units
+#    co the la ca dept/unit.
 # ----------------------------------------------------
 SAMPLE_RESPONSES = [
     {
@@ -358,7 +381,7 @@ SAMPLE_RESPONSES = [
             "subject": "Trình tự, thủ tục, biểu mẫu thực hiện chính sách thu hút và ưu đãi bác sĩ, dược sĩ theo NQ 54/2026/NQ-HĐND",
             "summary": "Trình tự, thủ tục, biểu mẫu thực hiện chính sách thu hút và ưu đãi bác sĩ, dược sĩ theo NQ 54/2026/NQ-HĐND",
             "processing_unit": _org_tag_label("tram_yte"),
-            "monitoring_leader": "Chủ tịch UBND xã",
+            "monitoring_leader": _org_tag_label("chu_tich"),
             "implementation_deadline": "trong 07 ngày làm việc",
             "coordinating_units": [_org_tag_label("phong_vhxh"), _org_tag_label("vanphong_ubnd_hdnd")],
             "notes": "Văn bản ưu đãi ngành Y tế - Ưu tiên xử lý"
@@ -376,7 +399,7 @@ SAMPLE_RESPONSES = [
             "subject": "Phối hợp cung cấp số liệu về tỷ lệ nghèo đa chiều phục vụ xác định thôn vùng đồng bào DTTS",
             "summary": "Phối hợp cung cấp số liệu về tỷ lệ nghèo đa chiều phục vụ xác định thôn vùng đồng bào DTTS",
             "processing_unit": _org_tag_label("phong_kt"),
-            "monitoring_leader": "Phó chủ tịch phụ trách kinh tế",
+            "monitoring_leader": _org_tag_label("pho_chu_tich_1"),
             "implementation_deadline": "trong 05 ngày làm việc",
             "coordinating_units": [_org_tag_label("phong_vhxh"), _org_tag_label("trungtam_hcc")],
             "notes": "Yêu cầu số liệu trước ngày 25"
@@ -394,7 +417,7 @@ SAMPLE_RESPONSES = [
             "subject": "Niêm yết công khai xác nhận nguồn gốc đất, thời điểm sử dụng đất và cấp GCN QSD đất lần đầu",
             "summary": "Niêm yết công khai xác nhận nguồn gốc đất, thời điểm sử dụng đất và cấp GCN QSD đất lần đầu",
             "processing_unit": _org_tag_label("vanphong_ubnd_hdnd"),
-            "monitoring_leader": "Chủ tịch UBND xã",
+            "monitoring_leader": _org_tag_label("chu_tich"),
             "implementation_deadline": "trong 15 ngày",
             "coordinating_units": [_org_tag_label("congan_xa"), _org_tag_label("phong_kt")],
             "notes": "Niêm yết 15 ngày tại trụ sở"
@@ -412,7 +435,7 @@ SAMPLE_RESPONSES = [
             "subject": "Niêm yết công khai kết quả kiểm tra hồ sơ đăng ký của ông Nguyễn Văn Cang",
             "summary": "Niêm yết công khai kết quả kiểm tra hồ sơ đăng ký của ông Nguyễn Văn Cang",
             "processing_unit": _org_tag_label("vanphong_ubnd_hdnd"),
-            "monitoring_leader": "Chủ tịch UBND xã",
+            "monitoring_leader": _org_tag_label("chu_tich"),
             "implementation_deadline": "trong 10 ngày làm việc",
             "coordinating_units": [_org_tag_label("congan_xa"), _org_tag_label("phong_kt"), _org_tag_label("van_thu_congan")],
             "notes": "Hồ sơ đất đai cá nhân"
@@ -430,7 +453,7 @@ SAMPLE_RESPONSES = [
             "subject": "Góp ý dự thảo Thông tư hướng dẫn xây dựng, khai thác học liệu số trong bồi dưỡng cán bộ",
             "summary": "Góp ý dự thảo Thông tư hướng dẫn xây dựng, khai thác học liệu số trong bồi dưỡng cán bộ",
             "processing_unit": _org_tag_label("chu_tich"),
-            "monitoring_leader": "Chủ tịch HĐND xã",
+            "monitoring_leader": _org_tag_label("pho_chu_tich_2"),
             "implementation_deadline": "trong 07 ngày làm việc",
             "coordinating_units": [_org_tag_label("van_thu_kt"), _org_tag_label("pho_chu_tich_2")],
             "notes": "Gửi văn bản góp ý về Sở Nội vụ"
@@ -448,7 +471,7 @@ SAMPLE_RESPONSES = [
             "subject": "Phê duyệt danh sách tổ chức, cá nhân tham gia mạng lưới tư vấn viên pháp luật tỉnh Gia Lai",
             "summary": "Phê duyệt danh sách tổ chức, cá nhân tham gia mạng lưới tư vấn viên pháp luật tỉnh Gia Lai",
             "processing_unit": _org_tag_label("ubnd_xa"),
-            "monitoring_leader": "Chủ tịch UBND xã",
+            "monitoring_leader": _org_tag_label("chu_tich"),
             "implementation_deadline": "trong 05 ngày làm việc",
             "coordinating_units": [_org_tag_label("congan_xa"), _org_tag_label("phong_vhxh")],
             "notes": "Cập nhật danh sách tư vấn viên"
@@ -466,7 +489,7 @@ SAMPLE_RESPONSES = [
             "subject": "Triển khai Kế hoạch số 261/KH-UBND ngày 26/6/2026 về thực hiện BHYT toàn dân giai đoạn mới",
             "summary": "Triển khai Kế hoạch số 261/KH-UBND ngày 26/6/2026 về thực hiện BHYT toàn dân giai đoạn mới",
             "processing_unit": _org_tag_label("tram_yte"),
-            "monitoring_leader": "Phó chủ tịch phụ phụ trách kinh tế",
+            "monitoring_leader": _org_tag_label("pho_chu_tich_1"),
             "implementation_deadline": "trong 10 ngày làm việc",
             "coordinating_units": [_org_tag_label("phong_vhxh"), _org_tag_label("trungtam_hcc"), _org_tag_label("van_thu_hcc")],
             "notes": "Tuyên truyền BHYT toàn dân"
@@ -484,7 +507,7 @@ SAMPLE_RESPONSES = [
             "subject": "Thông báo tiếp nhận văn bản hệ thống quản lý văn bản trên môi trường điện tử",
             "summary": "Thông báo tiếp nhận văn bản hệ thống quản lý văn bản trên môi trường điện tử",
             "processing_unit": _org_tag_label("pho_chu_tich_1"),
-            "monitoring_leader": "Chủ tịch UBND xã",
+            "monitoring_leader": _org_tag_label("chu_tich"),
             "implementation_deadline": "trong 03 ngày làm việc",
             "coordinating_units": [_org_tag_label("vanphong_ubnd_hdnd"), _org_tag_label("chu_tich")],
             "notes": "Văn bản khẩn điện tử"
@@ -502,7 +525,7 @@ DEFAULT_DOC_DATA = {
     "subject": "Tự động phân tích văn bản đến",
     "summary": "Tự động phân tích văn bản đến từ hệ thống iDesk",
     "processing_unit": _org_tag_label("phong_kt"),
-    "monitoring_leader": "Chủ tịch UBND xã",
+    "monitoring_leader": _org_tag_label("chu_tich"),
     "implementation_deadline": "trong 05 ngày làm việc",
     "coordinating_units": [_org_tag_label("vanphong_ubnd_hdnd"), _org_tag_label("phong_kt")],
     "notes": "Phân tích mặc định từ AI Mock Backend"
@@ -941,15 +964,19 @@ def process_document():
             matched_data["subject"] = subject or "Văn bản chưa khớp mẫu"
             matched_data["summary"] = f"Tóm tắt tự động cho: {subject}" if subject else "Chờ xử lý"
             # Van ban khong khop mau nao -> sinh ngau nhien processing_unit /
-            # coordinating_units (tron dept/unit/alias) thay vi luon tra dung
-            # 1 gia tri co dinh cua DEFAULT_DOC_DATA, de FE/QA co the kiem tra
-            # duoc nhieu bien the cua tag "alias" qua nhieu lan goi.
+            # coordinating_units / monitoring_leader (tron dept/unit/alias) thay
+            # vi luon tra dung 1 gia tri co dinh cua DEFAULT_DOC_DATA, de FE/QA
+            # co the kiem tra duoc nhieu bien the cua tag "alias" qua nhieu lan
+            # goi — bao gom ca tinh nang thêm/sửa "Lãnh đạo theo dõi" moi.
             random_processing_unit, random_coordinating_units = _random_processing_and_coordinating_units()
+            random_monitoring_leader = _random_monitoring_leader()
             matched_data["processing_unit"] = random_processing_unit
             matched_data["coordinating_units"] = random_coordinating_units
+            matched_data["monitoring_leader"] = random_monitoring_leader
             print("\nNo exact pattern match, using randomized default mock response")
             print(f"Random processing_unit: {random_processing_unit}")
             print(f"Random coordinating_units: {random_coordinating_units}")
+            print(f"Random monitoring_leader: {random_monitoring_leader}")
 
         # Update dynamic fields (FE authoritative — field 2-7 theo METADATA_SCHEMA.md).
         # FE co the cao thieu 1 vai truong (xem _validate_identity_metadata da noi
