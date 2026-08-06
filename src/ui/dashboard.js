@@ -68,10 +68,14 @@ export const createDashboard = () => {
             emit('unit-remove-requested', { id, kind: 'main' });
         } else if (action === 'remove-co') {
             emit('unit-remove-requested', { id, kind: 'co', value: btn.getAttribute('data-value') });
+        } else if (action === 'remove-leader') {
+            emit('unit-remove-requested', { id, kind: 'leader' });
         } else if (action === 'add-main') {
             emit('unit-picker-requested', { id, kind: 'main', anchor: btn });
         } else if (action === 'add-co') {
             emit('unit-picker-requested', { id, kind: 'co', anchor: btn });
+        } else if (action === 'add-leader') {
+            emit('unit-picker-requested', { id, kind: 'leader', anchor: btn });
         } else if (action === 'edit-deadline') {
             emit('deadline-editor-requested', { id, anchor: btn });
         }
@@ -174,7 +178,7 @@ export const updateDashboard = () => {
 
         // --- Assignment ---
         const mainUnit = ai.processing_unit || null;
-        const leader = ai.monitoring_leader || '---';
+        const leader = ai.monitoring_leader || null;
         // `implementation_deadline` la string|null theo METADATA_SCHEMA.md (#11), khong
         // phai luon la so ngay — resolveDeadlineDate() xu ly moi dang hop le.
         const daysStr = resolveDeadlineDate(ai.implementation_deadline).displayText;
@@ -188,6 +192,16 @@ export const updateDashboard = () => {
                    <button type="button" class="rpa-unit-remove" data-action="remove-main" data-id="${id}" aria-label="Xoá">×</button>
                </span>`
             : `<button type="button" class="rpa-unit-pill rpa-unit-add" data-action="add-main" data-id="${id}">+ Thêm</button>`;
+
+        // Lãnh đạo theo dõi: cũng chỉ được chọn 1 (giống đơn vị xử lý chính), dùng
+        // chung 1 unitCache/picker nạp từ fbyvsphere.cpx (đã gồm cả "unit"/"dept"
+        // lẫn "alias" - người/chức danh cụ thể) nên không cần cây dữ liệu riêng.
+        const leaderHtml = leader
+            ? `<span class="rpa-unit-pill" title="${escAttr(leader)}">
+                   <span class="rpa-unit-pill-text">${escAttr(leader)}</span>
+                   <button type="button" class="rpa-unit-remove" data-action="remove-leader" data-id="${id}" aria-label="Xoá">×</button>
+               </span>`
+            : `<button type="button" class="rpa-unit-pill rpa-unit-add" data-action="add-leader" data-id="${id}">+ Thêm</button>`;
 
         // Đơn vị phối hợp: chọn nhiều, luôn hiện chip "+" ở cuối để thêm nếu thiếu.
         const addCoBtn = `<button type="button" class="rpa-unit-pill rpa-unit-add" data-action="add-co" data-id="${id}">+ Thêm</button>`;
@@ -275,7 +289,7 @@ export const updateDashboard = () => {
                         </div>
                         <div class="rpa-assign-item">
                             <span class="rpa-assign-label">Lãnh đạo theo dõi</span>
-                            <span class="rpa-assign-value" title="${escAttr(leader)}">${leader}</span>
+                            <div class="rpa-unit-tags">${leaderHtml}</div>
                         </div>
                         <div class="rpa-assign-item">
                             <span class="rpa-assign-label">Hạn thực hiện</span>

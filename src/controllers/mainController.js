@@ -154,9 +154,9 @@ const persistAiDataPatch = async (doc, fields) => {
     }
 };
 
-// Người dùng bấm "×" trên 1 chip đơn vị xử lý chính/phối hợp để xoá khỏi kết quả
-// AI đang review. Cập nhật doc.aiData trong bộ nhớ để UI phản hồi ngay, đồng thời
-// PATCH lên backend để lần tra cứu sau còn nhớ chỉnh sửa này.
+// Người dùng bấm "×" trên 1 chip đơn vị xử lý chính/phối hợp/lãnh đạo theo dõi để
+// xoá khỏi kết quả AI đang review. Cập nhật doc.aiData trong bộ nhớ để UI phản hồi
+// ngay, đồng thời PATCH lên backend để lần tra cứu sau còn nhớ chỉnh sửa này.
 on('unit-remove-requested', ({ id, kind, value }) => {
     const doc = docCache.get(id);
     if (!doc || !doc.aiData) return;
@@ -165,6 +165,10 @@ on('unit-remove-requested', ({ id, kind, value }) => {
         doc.aiData.processing_unit = null;
         emit('docs-changed');
         persistAiDataPatch(doc, { processing_unit: null });
+    } else if (kind === 'leader') {
+        doc.aiData.monitoring_leader = null;
+        emit('docs-changed');
+        persistAiDataPatch(doc, { monitoring_leader: null });
     } else {
         // Nếu coordinating_units không phải mảng (vi phạm docflow.md mục 4), coi thao
         // tác xoá như "reset về rỗng" thay vì cố lọc theo giá trị.
@@ -176,9 +180,9 @@ on('unit-remove-requested', ({ id, kind, value }) => {
 });
 
 // Người dùng chọn xong 1 đơn vị/người trong dropdown (unitPicker) — ghi nhận vào
-// aiData của văn bản tương ứng. Đơn vị xử lý chính chỉ 1 giá trị (thay thế), đơn
-// vị phối hợp cho phép nhiều giá trị (thêm vào, không trùng lặp). Sau khi cập
-// nhật RAM, PATCH lên backend để lưu lại chỉnh sửa.
+// aiData của văn bản tương ứng. Đơn vị xử lý chính và lãnh đạo theo dõi chỉ 1 giá
+// trị (thay thế), đơn vị phối hợp cho phép nhiều giá trị (thêm vào, không trùng
+// lặp). Sau khi cập nhật RAM, PATCH lên backend để lưu lại chỉnh sửa.
 on('unit-add-confirmed', ({ id, kind, label }) => {
     const doc = docCache.get(id);
     if (!doc) return;
@@ -188,6 +192,10 @@ on('unit-add-confirmed', ({ id, kind, label }) => {
         doc.aiData.processing_unit = label;
         emit('docs-changed');
         persistAiDataPatch(doc, { processing_unit: label });
+    } else if (kind === 'leader') {
+        doc.aiData.monitoring_leader = label;
+        emit('docs-changed');
+        persistAiDataPatch(doc, { monitoring_leader: label });
     } else {
         doc.aiData.coordinating_units = Array.isArray(doc.aiData.coordinating_units) ? doc.aiData.coordinating_units : [];
         if (!doc.aiData.coordinating_units.includes(label)) doc.aiData.coordinating_units.push(label);

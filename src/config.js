@@ -28,6 +28,10 @@ export const CONFIG = {
         EXPAND_TREE: 600,
         TREE_SEARCH: 500,
         CLOSE_TREE: 350,
+        // Delay cho hieu ung an/hien (slideDown/show) cua khoi div[data-role="follow"]
+        // sau khi bam #ed-transfer-add-follow-btn, TRUOC khi popup cay #ed-transfer-select-user-follow
+        // co the duoc mo va thao tac (xem ghi chu trong formFiller.js).
+        TOGGLE_FOLLOW: 500,
         AFTER_SUBMIT: 1800,
         BETWEEN_DOCS: 800,
         // Backend gioi han 30 request/60s cho moi endpoint (xem mock_backend.py
@@ -46,6 +50,14 @@ export const S = {
     RESPONSIBLE_WRAP: '#ed-transfer-select-user-responsible',
     PARTICIPANTS_LINK: '#ed-transfer-select-user-participants a.user-box-link',
     PARTICIPANTS_WRAP: '#ed-transfer-select-user-participants',
+    // Truong "Theo doi" (lanh dao theo doi) MAC DINH AN tren form that - nam trong
+    // div[data-role="follow"] co class "hide". Phai bam FOLLOW_TOGGLE_BTN de lo dien
+    // no ra truoc khi co the query/click vao FOLLOW_LINK (xem formFiller.js va
+    // resource/"Van thu role"/right_panel_after_save_and_transfer.html - link luc
+    // an hien chu "Thêm người theo dõi", sau khi bam doi thanh "Ẩn người theo dõi").
+    FOLLOW_TOGGLE_BTN: '#ed-transfer-add-follow-btn',
+    FOLLOW_LINK: '#ed-transfer-select-user-follow a.user-box-link',
+    FOLLOW_WRAP: '#ed-transfer-select-user-follow',
     DEADLINE_INPUT: '#ed-transfer-txt-deadline',
     DEADLINE_NUMBER: '#ed-transfer-txt-deadline-number',
     PRIORITY_SELECT: '#ed-transfer-select-priority',
