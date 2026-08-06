@@ -746,6 +746,47 @@ def _classify_comparison_code(dept_name):
     return slug or 'OTHER'
 
 
+# ----------------------------------------------------
+# 2c-bis. Ban va dong bo voi du lieu moi nhat tu nhanh 'dataUpdate' (commit
+#     1367d00 "updateDB(03/08/26)", ngay 03/08/2026) — theo yeu cau KHONG sua
+#     truc tiep file clean_data/*.json (nguon do team khac quan ly), nen ap
+#     dung phan chenh lech thuc chat NGAY TRONG mock backend, sau khi doc xong
+#     file clean_data/ cu, truoc khi dung thanh Ward/Organization/Entry.
+#
+#     Chenh lech duy nhat co y nghia giua clean_data/ hien tai va commit
+#     1367d00 (phan con lai chi la doi thu tu phan tu trong mang JSON, khong
+#     doi noi dung): alias id=8426 (xa Vinh Thanh, "Dang Thi Thanh Thao")
+#     thang chuc tu "Chuyen vien" (rank specialist) len "Pho giam doc" (rank
+#     leader).
+#
+#     Ban va nay CHI ghi de dung cac truong duoc khai bao, giu nguyen cac
+#     truong con lai cua alias goc (refUname, refFullname, order...). Neu sau
+#     nay clean_data/*.json duoc cap nhat that (id khong con khop gia tri
+#     "truoc ban va" hoac khong con ton tai), ham ap dung se tu bo qua id do,
+#     KHONG lam loi mock backend.
+# ----------------------------------------------------
+WARD_CATALOG_PATCHES = {
+    "VINH_THANH": {
+        8426: {"name": "Phó giám đốc", "rank": "leader"},
+    },
+}
+
+
+def _apply_ward_catalog_patches(ward_code, elements):
+    """Ap dung WARD_CATALOG_PATCHES len danh sach elements tho (truoc khi tach
+    unit/dept/alias) cua 1 xa, chi ghi de cac key duoc khai bao trong patch.
+    """
+    patches = WARD_CATALOG_PATCHES.get(ward_code)
+    if not patches:
+        return elements
+    by_id = {el.get('id'): el for el in elements}
+    for element_id, overrides in patches.items():
+        target = by_id.get(element_id)
+        if target is not None:
+            target.update(overrides)
+    return elements
+
+
 def _load_ward_catalog():
     """Doc cay to chuc that (unit/dept/alias) cua tung xa tu clean_data/*.json
     va dung thanh Ward -> Organization -> Entry. Neu thieu file (vd moi truong
@@ -764,6 +805,8 @@ def _load_ward_catalog():
                 elements = json.load(f).get('elements', [])
         except (OSError, ValueError):
             elements = []
+
+        elements = _apply_ward_catalog_patches(ward_code, elements)
 
         units = [e for e in elements if e.get('type') == 'unit']
         depts = [e for e in elements if e.get('type') == 'dept']
