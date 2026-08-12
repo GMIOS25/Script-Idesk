@@ -1,16 +1,16 @@
 export const CSS_STYLES = `
-    /* ===== iDesk RPA Minimalist UI v3.0 (Bento Card Feed - Direct Scroll) ===== */
+    /* ===== iDesk RPA Minimalist Light UI v3.0 ===== */
     #idesk-rpa-hub {
         position: fixed !important;
         bottom: 20px !important;
         right: 20px !important;
         width: min(1200px, 95vw) !important;
         height: min(780px, 88vh) !important;
-        background: #121212 !important;
-        border: 1px solid #282828 !important;
+        background: #FFFFFF !important;
+        border: 1px solid #CBD5E1 !important;
         border-radius: 8px !important;
-        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4) !important;
-        color: #EAEAEA !important;
+        box-shadow: 0 10px 35px rgba(0, 0, 0, 0.15) !important;
+        color: #1E293B !important;
         font-family: 'SF Pro Display', 'Geist Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
         z-index: 999999 !important;
         display: flex !important;
@@ -37,8 +37,8 @@ export const CSS_STYLES = `
         justify-content: space-between !important;
         align-items: center !important;
         padding: 10px 16px !important;
-        background: #181818 !important;
-        border-bottom: 1px solid #262626 !important;
+        background: #438eb9 !important;
+        border-bottom: 1px solid #357298 !important;
         cursor: grab !important;
         min-height: 42px !important;
     }
@@ -54,8 +54,8 @@ export const CSS_STYLES = `
         letter-spacing: -0.01em !important;
     }
     .rpa-title .badge-count {
-        background: #262626 !important;
-        color: #A1A1AA !important;
+        background: rgba(255, 255, 255, 0.25) !important;
+        color: #FFFFFF !important;
         font-size: 11px !important;
         padding: 1px 8px !important;
         border-radius: 9999px !important;
@@ -64,9 +64,9 @@ export const CSS_STYLES = `
 
     .rpa-header-actions { display: flex !important; gap: 6px !important; }
     .rpa-header-actions button {
-        background: transparent !important;
-        border: 1px solid #2A2A2A !important;
-        color: #A1A1AA !important;
+        background: rgba(255, 255, 255, 0.15) !important;
+        border: 1px solid rgba(255, 255, 255, 0.3) !important;
+        color: #FFFFFF !important;
         cursor: pointer !important;
         padding: 4px 10px !important;
         border-radius: 4px !important;
@@ -74,7 +74,7 @@ export const CSS_STYLES = `
         transition: all 0.15s !important;
     }
     .rpa-header-actions button:hover {
-        background: #262626 !important;
+        background: rgba(255, 255, 255, 0.3) !important;
         color: #FFFFFF !important;
     }
 
@@ -91,16 +91,16 @@ export const CSS_STYLES = `
         display: flex !important;
         gap: 12px !important;
         align-items: center !important;
-        background: #161618 !important;
+        background: #F8F8F8 !important;
         padding: 8px 12px !important;
         border-radius: 6px !important;
-        border: 1px solid #242427 !important;
+        border: 1px solid #E2E8F0 !important;
     }
 
     .rpa-btn {
-        background: #1A1A1A !important;
-        border: 1px solid #333333 !important;
-        color: #EAEAEA !important;
+        background: #FFFFFF !important;
+        border: 1px solid #CBD5E1 !important;
+        color: #1E293B !important;
         border-radius: 4px !important;
         padding: 7px 16px !important;
         font-weight: 500 !important;
@@ -108,33 +108,33 @@ export const CSS_STYLES = `
         cursor: pointer !important;
         display: inline-flex !important;
         align-items: center !important;
-        transition: background 0.15s, transform 0.1s !important;
+        transition: background 0.15s, transform 0.1s, border-color 0.15s !important;
     }
-    .rpa-btn:hover { background: #262626 !important; color: #FFFFFF !important; }
+    .rpa-btn:hover { background: #F1F5F9 !important; color: #0F172A !important; border-color: #94A3B8 !important; }
     .rpa-btn:active { transform: scale(0.98) !important; }
 
     .rpa-btn-primary {
-        background: #FFFFFF !important;
-        color: #111111 !important;
-        border: 1px solid #FFFFFF !important;
+        background: #438eb9 !important;
+        color: #FFFFFF !important;
+        border: 1px solid #438eb9 !important;
         font-weight: 600 !important;
     }
-    .rpa-btn-primary:hover { background: #E5E5E5 !important; }
+    .rpa-btn-primary:hover { background: #357298 !important; border-color: #357298 !important; color: #FFFFFF !important; }
 
     .rpa-btn-purple {
-        background: #EAEAEA !important;
-        color: #111111 !important;
-        border: 1px solid #EAEAEA !important;
+        background: #438eb9 !important;
+        color: #FFFFFF !important;
+        border: 1px solid #438eb9 !important;
         font-weight: 600 !important;
     }
-    .rpa-btn-purple:hover { background: #D4D4D4 !important; }
+    .rpa-btn-purple:hover { background: #357298 !important; border-color: #357298 !important; color: #FFFFFF !important; }
 
     .rpa-btn-outline {
         background: transparent !important;
-        border: 1px solid #2E2E2E !important;
-        color: #A1A1AA !important;
+        border: 1px solid #CBD5E1 !important;
+        color: #475569 !important;
     }
-    .rpa-btn-outline:hover { border-color: #444444 !important; color: #FFFFFF !important; }
+    .rpa-btn-outline:hover { border-color: #438eb9 !important; color: #438eb9 !important; background: #DFEFFF !important; }
 
     /* ===== CARD FEED WRAPPER ===== */
     .rpa-feed-wrap {
@@ -143,7 +143,8 @@ export const CSS_STYLES = `
         padding-right: 4px !important;
     }
     .rpa-feed-wrap::-webkit-scrollbar { width: 6px !important; }
-    .rpa-feed-wrap::-webkit-scrollbar-thumb { background: #282828 !important; border-radius: 3px !important; }
+    .rpa-feed-wrap::-webkit-scrollbar-thumb { background: #CBD5E1 !important; border-radius: 3px !important; }
+    .rpa-feed-wrap::-webkit-scrollbar-thumb:hover { background: #94A3B8 !important; }
 
     .rpa-card-feed {
         display: flex !important;
@@ -153,28 +154,29 @@ export const CSS_STYLES = `
 
     .rpa-empty-state {
         text-align: center !important;
-        color: #71717A !important;
+        color: #64748B !important;
         padding: 48px 20px !important;
-        background: #161618 !important;
-        border: 1px solid #262626 !important;
+        background: #F5F5F5 !important;
+        border: 1px solid #E2E8F0 !important;
         border-radius: 8px !important;
         font-size: 13px !important;
     }
 
     /* ===== DOCUMENT BENTO CARD ===== */
     .rpa-doc-card {
-        background: #161618 !important;
-        border: 1px solid #28282B !important;
+        background: #F8F8F8 !important;
+        border: 1px solid #E2E8F0 !important;
         border-radius: 8px !important;
         padding: 14px 16px !important;
         display: flex !important;
         flex-direction: column !important;
         gap: 10px !important;
-        transition: border-color 0.15s, background 0.15s !important;
+        transition: border-color 0.15s, background 0.15s, box-shadow 0.15s !important;
     }
     .rpa-doc-card:hover {
-        border-color: #3F3F46 !important;
-        background: #18181B !important;
+        border-color: #438eb9 !important;
+        background: #FFFFFF !important;
+        box-shadow: 0 4px 12px rgba(67, 142, 185, 0.08) !important;
     }
 
     /* Card Header — flex-wrap badges row */
@@ -183,7 +185,7 @@ export const CSS_STYLES = `
         align-items: flex-start !important;
         gap: 8px !important;
         padding-bottom: 10px !important;
-        border-bottom: 1px solid #242427 !important;
+        border-bottom: 1px solid #E2E8F0 !important;
     }
     .rpa-card-header-left {
         flex: 1 !important;
@@ -206,9 +208,9 @@ export const CSS_STYLES = `
         font-family: 'Geist Mono', 'SF Mono', monospace !important;
         font-size: 11px !important;
         font-weight: 500 !important;
-        color: #C4C4C7 !important;
-        background: #1E1E21 !important;
-        border: 1px solid #2E2E32 !important;
+        color: #334155 !important;
+        background: #F1F5F9 !important;
+        border: 1px solid #E2E8F0 !important;
         padding: 2px 8px !important;
         border-radius: 4px !important;
         white-space: nowrap !important;
@@ -219,26 +221,34 @@ export const CSS_STYLES = `
         transition: border-color 0.12s, background 0.12s !important;
     }
     .rpa-badge-chip:hover {
-        border-color: #4A4A50 !important;
-        background: #252529 !important;
+        border-color: #CBD5E1 !important;
+        background: #E2E8F0 !important;
+        color: #0F172A !important;
     }
     .rpa-badge-chip.is-signnumber {
-        color: #FFFFFF !important;
+        color: #0F172A !important;
         font-weight: 700 !important;
-        background: #28282E !important;
-        border-color: #3A3A42 !important;
+        background: #F9F9F9 !important;
+        border-color: #E2E8F0 !important;
         font-size: 12px !important;
     }
     .rpa-badge-chip.is-signnumber:hover {
-        background: #303036 !important;
-        border-color: #505058 !important;
+        background: #DFEFFF !important;
+        border-color: #BEE3F8 !important;
+        color: #0284C7 !important;
     }
 
-    /* === Priority chip — subtle accent, not louder than signnumber === */
+    /* === Priority chip — Trắng vàng mềm mại, tương phản cao === */
     .rpa-badge-chip.is-priority {
-        color: #F5A623 !important;
-        background: #2A2315 !important;
-        border-color: #3D2F1A !important;
+        color: #B45309 !important;
+        background: #FEF3C7 !important;
+        border-color: #FDE68A !important;
+        font-weight: 600 !important;
+    }
+    .rpa-badge-chip.is-priority:hover {
+        background: #FDE68A !important;
+        border-color: #FCD34D !important;
+        color: #92400E !important;
     }
 
     /* === Status Badge (pill, round) === */
@@ -247,16 +257,16 @@ export const CSS_STYLES = `
         align-items: center !important;
         padding: 3px 10px !important;
         border-radius: 9999px !important;
-        font-weight: 500 !important;
+        font-weight: 600 !important;
         font-size: 11px !important;
         letter-spacing: 0.03em !important;
         text-transform: uppercase !important;
     }
-    .rpa-badge-idle { background: #27272A !important; color: #A1A1AA !important; }
-    .rpa-badge-pending { background: #E1F3FE !important; color: #1F6C9F !important; }
-    .rpa-badge-success { background: #EDF3EC !important; color: #346538 !important; }
-    .rpa-badge-error { background: #FDEBEC !important; color: #9F2F2D !important; }
-    .rpa-badge-sent { background: #E1F3FE !important; color: #1F6C9F !important; }
+    .rpa-badge-idle { background: #F1F5F9 !important; color: #475569 !important; border: 1px solid #E2E8F0 !important; }
+    .rpa-badge-pending { background: #E1F3FE !important; color: #1F6C9F !important; border: 1px solid #BAE6FD !important; }
+    .rpa-badge-success { background: #EDF3EC !important; color: #346538 !important; border: 1px solid #BBF7D0 !important; }
+    .rpa-badge-error { background: #FDEBEC !important; color: #9F2F2D !important; border: 1px solid #FECACA !important; }
+    .rpa-badge-sent { background: #E1F3FE !important; color: #1F6C9F !important; border: 1px solid #BAE6FD !important; }
 
     /* Card Body */
     .rpa-card-body {
@@ -268,12 +278,12 @@ export const CSS_STYLES = `
     .rpa-card-subject {
         font-size: 14px !important;
         font-weight: 600 !important;
-        color: #F4F4F5 !important;
+        color: #0F172A !important;
         line-height: 1.5 !important;
     }
     .rpa-subject-label {
-        color: #71717A !important;
-        font-weight: 500 !important;
+        color: #475569 !important;
+        font-weight: 600 !important;
         font-size: 12px !important;
         text-transform: uppercase !important;
         margin-right: 4px !important;
@@ -281,9 +291,9 @@ export const CSS_STYLES = `
 
     /* AI Summary Callout */
     .rpa-card-summary {
-        background: #111113 !important;
-        border: 1px solid #242427 !important;
-        border-left: 3px solid #EAEAEA !important;
+        background: #DFEFFF !important;
+        border: 1px solid #BEE3F8 !important;
+        border-left: 4px solid #438eb9 !important;
         border-radius: 6px !important;
         padding: 10px 14px !important;
     }
@@ -291,14 +301,14 @@ export const CSS_STYLES = `
         font-size: 10px !important;
         text-transform: uppercase !important;
         letter-spacing: 0.08em !important;
-        color: #A1A1AA !important;
-        font-weight: 600 !important;
+        color: #1E3A8A !important;
+        font-weight: 700 !important;
         margin-bottom: 4px !important;
         font-family: 'Geist Mono', 'SF Mono', monospace !important;
     }
     .rpa-summary-text {
         font-size: 13px !important;
-        color: #E4E4E7 !important;
+        color: #1E293B !important;
         line-height: 1.6 !important;
         white-space: pre-wrap !important;
     }
@@ -308,8 +318,8 @@ export const CSS_STYLES = `
         display: grid !important;
         grid-template-columns: 1fr 1fr !important;
         gap: 10px !important;
-        background: #131315 !important;
-        border: 1px solid #222225 !important;
+        background: #F3F7FA !important;
+        border: 1px solid #E2E8F0 !important;
         padding: 10px 12px !important;
         border-radius: 6px !important;
     }
@@ -328,25 +338,25 @@ export const CSS_STYLES = `
         font-size: 10px !important;
         text-transform: uppercase !important;
         letter-spacing: 0.05em !important;
-        color: #71717A !important;
+        color: #64748B !important;
         font-weight: 600 !important;
     }
     .rpa-assign-value {
         font-size: 12px !important;
-        color: #D4D4D8 !important;
+        color: #334155 !important;
         line-height: 1.4 !important;
         overflow: hidden !important;
         text-overflow: ellipsis !important;
         white-space: nowrap !important;
     }
     .rpa-assign-value.is-main-unit {
-        color: #FFFFFF !important;
+        color: #0F172A !important;
         font-weight: 600 !important;
     }
     .rpa-assign-value.is-deadline {
         font-family: 'Geist Mono', 'SF Mono', monospace !important;
-        color: #FFFFFF !important;
-        font-weight: 500 !important;
+        color: #0F172A !important;
+        font-weight: 600 !important;
     }
 
     /* Nút "Hạn thực hiện" — bấm để mở popover chỉnh số ngày (chỉ tương tác con số). */
@@ -362,16 +372,16 @@ export const CSS_STYLES = `
         border-radius: 4px !important;
         cursor: pointer !important;
         font-family: 'Geist Mono', 'SF Mono', monospace !important;
-        color: #FFFFFF !important;
-        font-weight: 500 !important;
+        color: #0F172A !important;
+        font-weight: 600 !important;
         font-size: 12px !important;
         width: fit-content !important;
         max-width: 100% !important;
         text-align: left !important;
     }
     .rpa-deadline-btn:hover {
-        background: #1D1D20 !important;
-        border-color: #3A3A3E !important;
+        background: #E2E8F0 !important;
+        border-color: #CBD5E1 !important;
     }
     .rpa-deadline-btn-text {
         overflow: hidden !important;
@@ -380,31 +390,31 @@ export const CSS_STYLES = `
     }
     .rpa-deadline-btn-icon {
         flex-shrink: 0 !important;
-        color: #71717A !important;
+        color: #64748B !important;
     }
-    .rpa-deadline-btn:hover .rpa-deadline-btn-icon { color: #EAEAEA !important; }
+    .rpa-deadline-btn:hover .rpa-deadline-btn-icon { color: #0F172A !important; }
 
     /* ===== DEADLINE EDITOR (popover chỉnh số ngày hạn thực hiện) ===== */
     .rpa-deadline-editor {
         position: fixed !important;
         z-index: 1000001 !important;
-        background: #18181B !important;
-        border: 1px solid #333338 !important;
+        background: #FFFFFF !important;
+        border: 1px solid #CBD5E1 !important;
         border-radius: 6px !important;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45) !important;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12) !important;
         padding: 10px !important;
         display: flex !important;
         flex-direction: column !important;
         gap: 8px !important;
         font-family: 'SF Pro Display', 'Geist Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
-        color: #EAEAEA !important;
+        color: #1E293B !important;
     }
     .rpa-deadline-editor-title {
         font-size: 11px !important;
         font-weight: 600 !important;
         text-transform: uppercase !important;
         letter-spacing: 0.05em !important;
-        color: #71717A !important;
+        color: #64748B !important;
     }
     .rpa-deadline-editor-row {
         display: flex !important;
@@ -415,9 +425,9 @@ export const CSS_STYLES = `
         flex-shrink: 0 !important;
         width: 28px !important;
         height: 28px !important;
-        background: #1A1A1A !important;
-        border: 1px solid #333333 !important;
-        color: #EAEAEA !important;
+        background: #F1F5F9 !important;
+        border: 1px solid #CBD5E1 !important;
+        color: #1E293B !important;
         border-radius: 4px !important;
         font-size: 15px !important;
         line-height: 1 !important;
@@ -426,14 +436,14 @@ export const CSS_STYLES = `
         align-items: center !important;
         justify-content: center !important;
     }
-    .rpa-deadline-step:hover { background: #262626 !important; color: #FFFFFF !important; }
+    .rpa-deadline-step:hover { background: #E2E8F0 !important; color: #0F172A !important; }
     .rpa-deadline-step:active { transform: scale(0.96) !important; }
     .rpa-deadline-input {
         flex: 1 !important;
         min-width: 0 !important;
-        background: #111113 !important;
-        border: 1px solid #2E2E32 !important;
-        color: #EAEAEA !important;
+        background: #FFFFFF !important;
+        border: 1px solid #CBD5E1 !important;
+        color: #0F172A !important;
         border-radius: 4px !important;
         padding: 5px 8px !important;
         font-size: 13px !important;
@@ -441,10 +451,10 @@ export const CSS_STYLES = `
         text-align: center !important;
         outline: none !important;
     }
-    .rpa-deadline-input:focus { border-color: #5A5A60 !important; }
+    .rpa-deadline-input:focus { border-color: #438eb9 !important; box-shadow: 0 0 0 2px rgba(67, 142, 185, 0.2) !important; }
     .rpa-deadline-editor-hint {
         font-size: 10px !important;
-        color: #71717A !important;
+        color: #64748B !important;
         text-align: center !important;
     }
     .rpa-deadline-editor-actions {
@@ -467,9 +477,9 @@ export const CSS_STYLES = `
         display: inline-flex !important;
         align-items: center !important;
         gap: 5px !important;
-        background: #242427 !important;
-        border: 1px solid #333338 !important;
-        color: #D4D4D8 !important;
+        background: #E2E8F0 !important;
+        border: 1px solid #CBD5E1 !important;
+        color: #1E293B !important;
         padding: 2px 4px 2px 8px !important;
         border-radius: 4px !important;
         font-size: 11px !important;
@@ -484,7 +494,7 @@ export const CSS_STYLES = `
     .rpa-unit-remove {
         background: transparent !important;
         border: none !important;
-        color: #71717A !important;
+        color: #64748B !important;
         cursor: pointer !important;
         font-size: 14px !important;
         line-height: 1 !important;
@@ -492,22 +502,21 @@ export const CSS_STYLES = `
         border-radius: 3px !important;
         font-family: inherit !important;
     }
-    .rpa-unit-remove:hover { color: #FFFFFF !important; background: #3A3A3E !important; }
+    .rpa-unit-remove:hover { color: #0F172A !important; background: #CBD5E1 !important; }
 
-    /* Chip "+ Thêm": dashed border, dùng chung cho ô xử lý chính (khi trống) và
-       ô phối hợp (luôn hiện ở cuối danh sách). */
+    /* Chip "+ Thêm": dashed border */
     .rpa-unit-pill.rpa-unit-add {
         background: transparent !important;
-        border: 1px dashed #3A3A3E !important;
-        color: #8A8A90 !important;
+        border: 1px dashed #94A3B8 !important;
+        color: #475569 !important;
         cursor: pointer !important;
         padding: 2px 9px !important;
         font-family: inherit !important;
     }
     .rpa-unit-pill.rpa-unit-add:hover {
-        border-color: #6A6A70 !important;
-        color: #EAEAEA !important;
-        background: #1D1D20 !important;
+        border-color: #438eb9 !important;
+        color: #0284C7 !important;
+        background: #DFEFFF !important;
     }
 
     /* ===== UNIT PICKER (dropdown chọn đơn vị/người từ fbyvsphere.cpx) ===== */
@@ -515,15 +524,15 @@ export const CSS_STYLES = `
         position: fixed !important;
         z-index: 1000001 !important;
         max-height: 320px !important;
-        background: #18181B !important;
-        border: 1px solid #333338 !important;
+        background: #FFFFFF !important;
+        border: 1px solid #CBD5E1 !important;
         border-radius: 6px !important;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45) !important;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12) !important;
         display: flex !important;
         flex-direction: column !important;
         font-family: 'SF Pro Display', 'Geist Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
         font-size: 12px !important;
-        color: #EAEAEA !important;
+        color: #1E293B !important;
         overflow: hidden !important;
     }
     .rpa-unit-picker-search-wrap {
@@ -531,33 +540,33 @@ export const CSS_STYLES = `
         align-items: center !important;
         gap: 6px !important;
         padding: 8px !important;
-        border-bottom: 1px solid #28282B !important;
+        border-bottom: 1px solid #E2E8F0 !important;
         flex-shrink: 0 !important;
     }
     .rpa-unit-picker-search {
         flex: 1 !important;
-        background: #111113 !important;
-        border: 1px solid #2E2E32 !important;
-        color: #EAEAEA !important;
+        background: #FFFFFF !important;
+        border: 1px solid #CBD5E1 !important;
+        color: #0F172A !important;
         border-radius: 4px !important;
         padding: 5px 8px !important;
         font-size: 12px !important;
         outline: none !important;
         font-family: inherit !important;
     }
-    .rpa-unit-picker-search:focus { border-color: #5A5A60 !important; }
-    .rpa-unit-picker-search-icon { color: #71717A !important; flex-shrink: 0 !important; }
+    .rpa-unit-picker-search:focus { border-color: #438eb9 !important; box-shadow: 0 0 0 2px rgba(67, 142, 185, 0.2) !important; }
+    .rpa-unit-picker-search-icon { color: #64748B !important; flex-shrink: 0 !important; }
 
     .rpa-unit-picker-list {
         overflow-y: auto !important;
         padding: 4px 0 !important;
     }
     .rpa-unit-picker-list::-webkit-scrollbar { width: 6px !important; }
-    .rpa-unit-picker-list::-webkit-scrollbar-thumb { background: #2E2E32 !important; border-radius: 3px !important; }
+    .rpa-unit-picker-list::-webkit-scrollbar-thumb { background: #CBD5E1 !important; border-radius: 3px !important; }
 
     .rpa-unit-picker-empty {
         padding: 16px 10px !important;
-        color: #71717A !important;
+        color: #64748B !important;
         text-align: center !important;
         font-size: 12px !important;
     }
@@ -571,20 +580,21 @@ export const CSS_STYLES = `
         overflow: hidden !important;
         text-overflow: ellipsis !important;
     }
-    .rpa-unit-picker-row:hover { background: #26262A !important; }
-    .rpa-unit-picker-row.is-branch .rpa-unit-picker-label { color: #F4F4F5 !important; font-weight: 600 !important; }
+    .rpa-unit-picker-row:hover { background: #DFEFFF !important; }
+    .rpa-unit-picker-row.is-branch .rpa-unit-picker-label { color: #0F172A !important; font-weight: 600 !important; }
     .rpa-unit-picker-caret {
         display: inline-flex !important;
         width: 14px !important;
         flex-shrink: 0 !important;
         justify-content: center !important;
-        color: #71717A !important;
+        color: #64748B !important;
         font-size: 10px !important;
     }
     .rpa-unit-picker-label {
         overflow: hidden !important;
         text-overflow: ellipsis !important;
         white-space: nowrap !important;
+        color: #1E293B !important;
     }
 
     /* ===== LOG PANEL ===== */
@@ -608,10 +618,10 @@ export const CSS_STYLES = `
         justify-content: space-between !important;
         align-items: center !important;
         padding: 8px 16px !important;
-        background: #181818 !important;
-        border-top: 1px solid #262626 !important;
+        background: #438eb9 !important;
+        border-top: 1px solid #357298 !important;
         font-size: 11px !important;
-        color: #888888 !important;
+        color: #E0F2FE !important;
     }
 
     .rpa-progress-wrap {
@@ -622,7 +632,7 @@ export const CSS_STYLES = `
     .rpa-progress-bar {
         width: 100px !important;
         height: 6px !important;
-        background: #262626 !important;
+        background: rgba(255, 255, 255, 0.3) !important;
         border-radius: 3px !important;
         overflow: hidden !important;
     }
