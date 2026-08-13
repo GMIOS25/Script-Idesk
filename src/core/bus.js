@@ -10,9 +10,15 @@
 //   - 'fill-requested'        : UI báo người dùng bấm nút "Duyệt"
 //   - 'docs-changed'          : Logic báo docCache vừa thay đổi, UI cần render lại danh sách
 //   - 'progress'              : Logic báo tiến độ xử lý { current, total }, UI cập nhật progress bar
-//   - 'unit-remove-requested' : UI báo người dùng bấm "×" trên 1 chip đơn vị { id, kind: 'main'|'co', value? }
-//   - 'unit-picker-requested' : UI báo người dùng bấm "+" để thêm đơn vị { id, kind: 'main'|'co', anchor }
-//   - 'unit-add-confirmed'    : unitPicker báo người dùng đã chọn xong 1 đơn vị { id, kind: 'main'|'co', label }
+//   - 'unit-remove-requested' : UI báo người dùng bấm "×" trên 1 chip đơn vị { id, kind: 'main'|'co'|'leader', value? }
+//   - 'unit-picker-requested' : UI báo người dùng bấm "+" để thêm đơn vị { id, kind: 'main'|'co'|'leader', anchor }
+//   - 'unit-add-confirmed'    : unitPicker (chọn thủ công) HOẶC dashboard (bấm nút
+//                               "Gợi ý" hiện sẵn lúc review, xem suggestUnitLabel()
+//                               trong ui/unitPicker.js) báo 1 đơn vị đã được xác nhận
+//                               { id, kind: 'main'|'co'|'leader', label, replaceValue? }
+//                               — replaceValue (chỉ dùng khi kind:'co') là chuỗi thô
+//                               cần thay thế khi áp dụng gợi ý, tránh còn lại cả 2 bản
+//                               (thô + đã khớp) cùng lúc trong coordinating_units
 //   - 'deadline-editor-requested' : UI báo người dùng bấm vào "Hạn thực hiện" để sửa số ngày { id, anchor }
 //   - 'deadline-update-confirmed' : deadlineEditor báo người dùng đã lưu số ngày mới { id, days }
 // ==============================================================================

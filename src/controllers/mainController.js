@@ -43,7 +43,14 @@ export const scanAndSendAll = async () => {
             // Chỉ cần chạy 1 lần cho cả phiên: khi văn bản đầu tiên được mở, hệ thống
             // đã tự có exeacode (qua view.cpx) để lấy cây đơn vị của đúng xã đang
             // đăng nhập, phục vụ phần chỉnh sửa "Đơn vị xử lý"/"Đơn vị phối hợp".
-            if (!state.unitsPrimed) await primeUnitTreeDirect();
+            // Mồi thành công (chuyển false -> true) thì emit thêm 'docs-changed' để
+            // vẽ lại các card ĐÃ hiện trước đó ngay trong batch này (nếu có) — nhờ đó
+            // gợi ý đơn vị (suggestUnitLabel(), dựa trên unitCache) xuất hiện ngay cả
+            // với văn bản đầu tiên, không cần đợi văn bản kế tiếp mới trigger vẽ lại.
+            if (!state.unitsPrimed) {
+                const justPrimed = await primeUnitTreeDirect();
+                if (justPrimed) emit('docs-changed');
+            }
 
             if (!fullDoc.attachments || fullDoc.attachments.length === 0) {
                 throw new Error('Van ban khong co file dinh kem');
@@ -179,11 +186,21 @@ on('unit-remove-requested', ({ id, kind, value }) => {
     }
 });
 
-// Người dùng chọn xong 1 đơn vị/người trong dropdown (unitPicker) — ghi nhận vào
-// aiData của văn bản tương ứng. Đơn vị xử lý chính và lãnh đạo theo dõi chỉ 1 giá
-// trị (thay thế), đơn vị phối hợp cho phép nhiều giá trị (thêm vào, không trùng
-// lặp). Sau khi cập nhật RAM, PATCH lên backend để lưu lại chỉnh sửa.
-on('unit-add-confirmed', ({ id, kind, label }) => {
+// Người dùng chọn xong 1 đơn vị/người — hoặc là chọn thủ công qua dropdown
+// (unitPicker), hoặc là bấm nút "Gợi ý" ngay trên card review (dashboard.js,
+// dựa trên suggestUnitLabel() — xem ui/unitPicker.js) — ghi nhận vào aiData
+// của văn bản tương ứng. Đơn vị xử lý chính và lãnh đạo theo dõi chỉ 1 giá
+// trị (thay thế), đơn vị phối hợp cho phép nhiều giá trị (thêm vào, không
+// trùng lặp). Sau khi cập nhật RAM, PATCH lên backend để lưu lại chỉnh sửa.
+//
+// `replaceValue` (chỉ có ý nghĩa với kind 'co'): khi người dùng bấm "Gợi ý"
+// trên 1 chip đơn vị phối hợp ĐÃ CÓ SẴN 1 chuỗi thô từ AI (vd "Phòng kinh
+// tế"), cần loại bỏ đúng chuỗi thô đó khỏi mảng trước khi thêm giá trị đã
+// khớp (vd "Phòng Kinh tế - Xã Vĩnh Thạnh - Tỉnh Gia Lai") vào — nếu không sẽ
+// còn lại CẢ 2 bản (thô + đã khớp) cùng lúc trong danh sách. Luồng "+ Thêm"
+// thủ công (thêm 1 đơn vị phối hợp hoàn toàn mới) không set field này nên
+// không bị ảnh hưởng.
+on('unit-add-confirmed', ({ id, kind, label, replaceValue }) => {
     const doc = docCache.get(id);
     if (!doc) return;
     doc.aiData = doc.aiData || {};
@@ -197,8 +214,10 @@ on('unit-add-confirmed', ({ id, kind, label }) => {
         emit('docs-changed');
         persistAiDataPatch(doc, { monitoring_leader: label });
     } else {
-        doc.aiData.coordinating_units = Array.isArray(doc.aiData.coordinating_units) ? doc.aiData.coordinating_units : [];
-        if (!doc.aiData.coordinating_units.includes(label)) doc.aiData.coordinating_units.push(label);
+        let arr = Array.isArray(doc.aiData.coordinating_units) ? doc.aiData.coordinating_units : [];
+        if (replaceValue) arr = arr.filter((v) => v !== replaceValue);
+        if (!arr.includes(label)) arr.push(label);
+        doc.aiData.coordinating_units = arr;
         emit('docs-changed');
         persistAiDataPatch(doc, { coordinating_units: doc.aiData.coordinating_units });
     }

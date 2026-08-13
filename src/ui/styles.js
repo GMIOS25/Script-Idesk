@@ -519,6 +519,36 @@ export const CSS_STYLES = `
         background: #DFEFFF !important;
     }
 
+    /* Chip "Gợi ý": suggestUnitLabel() (ui/unitPicker.js) đã dò được 1 khớp GẦN
+       ĐÚNG trên cây đơn vị thật (unitCache) ngay lúc review, hiện cạnh chip AI
+       trả về thô — bấm là dùng luôn giá trị này (áp dụng y hệt như đang tự
+       chọn thủ công qua rpa-unit-picker), không cần mở popup. */
+    .rpa-unit-suggest {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 4px !important;
+        background: #ECFDF5 !important;
+        border: 1px dashed #34D399 !important;
+        color: #047857 !important;
+        padding: 2px 8px !important;
+        border-radius: 4px !important;
+        font-size: 11px !important;
+        max-width: 100% !important;
+        cursor: pointer !important;
+        font-family: inherit !important;
+    }
+    .rpa-unit-suggest:hover {
+        background: #D1FAE5 !important;
+        border-color: #10B981 !important;
+        color: #065F46 !important;
+    }
+    .rpa-unit-suggest-label {
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+        max-width: 260px !important;
+    }
+
     /* ===== UNIT PICKER (dropdown chọn đơn vị/người từ fbyvsphere.cpx) ===== */
     .rpa-unit-picker {
         position: fixed !important;

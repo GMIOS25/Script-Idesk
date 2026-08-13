@@ -1,11 +1,52 @@
 import { unitCache } from '../state.js';
 import { on, emit } from '../core/bus.js';
+import { findBestUnitMatch } from '../utils/unitMatch.js';
 
 // Chuỗi hiển thị cho 1 phần tử: "unit"/"dept" hiện tên đơn vị/phòng ban, "alias"
 // hiện "{Chức danh} ({Người phụ trách})" — đồng bộ với định dạng chip do backend
 // trả về (vd AI trả "Chỉ huy trưởng (Trần Thanh Đức)"), tránh lệch giá trị giữa
 // đơn vị do BE gán sẵn và đơn vị do user tự chọn qua picker.
 const labelOf = (u) => (u.type === 'alias' && u.refFullname) ? `${u.name} (${u.refFullname})` : u.name;
+
+/**
+ * Gợi ý 1 đơn vị/người THẬT (đã có sẵn trong unitCache) khớp gần đúng nhất với
+ * 1 chuỗi THÔ mà AI backend trả về (vd "Phòng kinh tế").
+ *
+ * TRƯỚC ĐÂY: việc so khớp gần đúng này (xem automation/treeSelect.js) CHỈ chạy
+ * SAU KHI người dùng đã bấm "Duyệt" và tool mở popup cây tổ chức THẬT trên hệ
+ * thống iDesk để tìm — nghĩa là người dùng không hề biết trước tool sẽ chọn
+ * đúng hay nhầm cho tới tận lúc điền xong form.
+ *
+ * BÂY GIỜ: hàm này chạy lại ĐÚNG thuật toán đó (findBestUnitMatch trong
+ * ../utils/unitMatch.js) nhưng SỚM HƠN — ngay lúc kết quả AI vừa hiện lên UI
+ * để review — và tra trên unitCache (cây đơn vị đã mồi sẵn qua fbyvsphere.cpx,
+ * xem automation/unitPrimer.js) thay vì DOM thật của hệ thống. Nhờ đó
+ * ui/dashboard.js có thể hiện gợi ý ngay tại card review cho người dùng xem
+ * trước/bấm chọn, không phải đợi tới lúc fill mới biết tool định chọn gì.
+ *
+ * Trả về nhãn hiển thị đầy đủ (đã qua labelOf, vd "Phòng Kinh tế - Xã Vĩnh
+ * Thạnh - Tỉnh Gia Lai") nếu tìm được ứng viên khớp VÀ nhãn đó khác với chuỗi
+ * thô ban đầu (giống hệt rồi thì không có gì để gợi ý thêm). Trả về `null` nếu
+ * unitCache rỗng (chưa mồi được cây đơn vị), không có chuỗi thô để so khớp,
+ * hoặc không có ứng viên nào khớp — ĐÚNG theo yêu cầu "không khớp thì không
+ * gợi ý gì cả", không đoán bừa.
+ */
+export const suggestUnitLabel = (rawValue) => {
+    if (!rawValue || !rawValue.trim() || unitCache.size === 0) return null;
+
+    const candidates = [];
+    unitCache.forEach((u) => candidates.push({ label: labelOf(u) }));
+
+    const best = findBestUnitMatch(candidates, rawValue.trim());
+    if (!best) return null;
+
+    // Khớp y hệt (không phân biệt hoa/thường) với giá trị thô thì không còn gì
+    // để gợi ý thêm — tránh hiện 1 nút "gợi ý" thay thế bằng đúng giá trị đang
+    // có sẵn.
+    if (best.label.trim().toLowerCase() === rawValue.trim().toLowerCase()) return null;
+
+    return best.label;
+};
 
 /**
  * Dựng cây cha-con từ unitCache (Map phẳng id -> unit). Node nào có `parent`

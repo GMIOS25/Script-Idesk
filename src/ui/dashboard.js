@@ -3,7 +3,7 @@ import { CSS_STYLES } from './styles.js';
 import { appendLog } from '../utils/logger.js';
 import { stripAgencySuffix, resolveDeadlineDate } from '../utils/helpers.js';
 import { on, emit } from '../core/bus.js';
-import './unitPicker.js'; // side-effect: đăng ký lắng nghe 'unit-picker-requested'
+import { suggestUnitLabel } from './unitPicker.js'; // cũng đăng ký lắng nghe 'unit-picker-requested' (side-effect khi import)
 import './deadlineEditor.js'; // side-effect: đăng ký lắng nghe 'deadline-editor-requested'
 
 let logPanel = null;
@@ -78,6 +78,16 @@ export const createDashboard = () => {
             emit('unit-picker-requested', { id, kind: 'leader', anchor: btn });
         } else if (action === 'edit-deadline') {
             emit('deadline-editor-requested', { id, anchor: btn });
+        } else if (action === 'apply-suggest-main') {
+            emit('unit-add-confirmed', { id, kind: 'main', label: btn.getAttribute('data-value') });
+        } else if (action === 'apply-suggest-leader') {
+            emit('unit-add-confirmed', { id, kind: 'leader', label: btn.getAttribute('data-value') });
+        } else if (action === 'apply-suggest-co') {
+            // replaceValue = chuỗi thô AI trả về ban đầu, cần loại khỏi mảng
+            // coordinating_units trước khi thêm giá trị đã khớp vào, nếu không
+            // sẽ còn lại cả 2 bản (thô + đã khớp) cùng lúc. Xử lý ở
+            // mainController.js (handler 'unit-add-confirmed', nhánh kind 'co').
+            emit('unit-add-confirmed', { id, kind: 'co', label: btn.getAttribute('data-value'), replaceValue: btn.getAttribute('data-raw') });
         }
     });
 
@@ -184,13 +194,32 @@ export const updateDashboard = () => {
         const daysStr = resolveDeadlineDate(ai.implementation_deadline).displayText;
         const coUnits = ai.coordinating_units;
 
+        // Gợi ý đơn vị THẬT khớp gần đúng với chuỗi thô AI trả về — tính NGAY
+        // lúc render card review, KHÔNG đợi tới lúc bấm "Duyệt" mới so khớp
+        // trên DOM thật như automation/treeSelect.js (xem suggestUnitLabel()
+        // trong ui/unitPicker.js, dùng chung 1 thuật toán khớp với lúc fill).
+        // unitCache chưa sẵn sàng hoặc không có ứng viên nào khớp -> null,
+        // khi đó KHÔNG hiện gợi ý gì (đúng yêu cầu, không đoán bừa).
+        const mainSuggestion = mainUnit ? suggestUnitLabel(mainUnit) : null;
+        const leaderSuggestion = leader ? suggestUnitLabel(leader) : null;
+
+        // Nút "Gợi ý": hiện NGAY cạnh chip hiện tại (không cần mở rpa-unit-picker),
+        // chỉ xuất hiện khi suggestUnitLabel() tìm được 1 khớp thật từ unitCache.
+        // Bấm là áp dụng luôn (emit 'unit-add-confirmed' y hệt như đang tự chọn
+        // thủ công qua picker) — 1 click, không cần xác nhận thêm lần nữa.
+        const suggestBtnHtml = (action, suggestion, extraAttr = '') => suggestion
+            ? `<button type="button" class="rpa-unit-suggest" data-action="${action}" data-id="${id}" data-value="${escAttr(suggestion)}" ${extraAttr} title="Khớp trên hệ thống: ${escAttr(suggestion)}">
+                   <span class="rpa-unit-suggest-label">Gợi ý: ${escHtml(suggestion)}</span>
+               </button>`
+            : '';
+
         // Đơn vị xử lý chính: chỉ được chọn 1. Có giá trị -> hiện chip + nút "×"
         // (không kèm nút "+"); trống -> chỉ hiện chip "+" để chọn.
         const mainUnitHtml = mainUnit
             ? `<span class="rpa-unit-pill" title="${escAttr(mainUnit)}">
                    <span class="rpa-unit-pill-text">${escAttr(mainUnit)}</span>
                    <button type="button" class="rpa-unit-remove" data-action="remove-main" data-id="${id}" aria-label="Xoá">×</button>
-               </span>`
+               </span>${suggestBtnHtml('apply-suggest-main', mainSuggestion)}`
             : `<button type="button" class="rpa-unit-pill rpa-unit-add" data-action="add-main" data-id="${id}">+ Thêm</button>`;
 
         // Lãnh đạo theo dõi: cũng chỉ được chọn 1 (giống đơn vị xử lý chính), dùng
@@ -200,16 +229,19 @@ export const updateDashboard = () => {
             ? `<span class="rpa-unit-pill" title="${escAttr(leader)}">
                    <span class="rpa-unit-pill-text">${escAttr(leader)}</span>
                    <button type="button" class="rpa-unit-remove" data-action="remove-leader" data-id="${id}" aria-label="Xoá">×</button>
-               </span>`
+               </span>${suggestBtnHtml('apply-suggest-leader', leaderSuggestion)}`
             : `<button type="button" class="rpa-unit-pill rpa-unit-add" data-action="add-leader" data-id="${id}">+ Thêm</button>`;
 
         // Đơn vị phối hợp: chọn nhiều, luôn hiện chip "+" ở cuối để thêm nếu thiếu.
+        // Mỗi phần tử có gợi ý RIÊNG (so khớp độc lập từng chuỗi thô trong mảng),
+        // kèm data-raw để mainController biết cần thay thế đúng phần tử nào khi
+        // người dùng bấm "Gợi ý" (xem action 'apply-suggest-co' phía trên).
         const addCoBtn = `<button type="button" class="rpa-unit-pill rpa-unit-add" data-action="add-co" data-id="${id}">+ Thêm</button>`;
         const coChip = (value) => `
             <span class="rpa-unit-pill" title="${escAttr(value)}">
                 <span class="rpa-unit-pill-text">${escAttr(value)}</span>
                 <button type="button" class="rpa-unit-remove" data-action="remove-co" data-id="${id}" data-value="${escAttr(value)}" aria-label="Xoá">×</button>
-            </span>`;
+            </span>${suggestBtnHtml('apply-suggest-co', suggestUnitLabel(value), `data-raw="${escAttr(value)}"`)}`;
 
         let coUnitsPills;
         if (Array.isArray(coUnits)) {

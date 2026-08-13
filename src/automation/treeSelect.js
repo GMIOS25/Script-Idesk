@@ -1,6 +1,7 @@
 import { CONFIG } from '../config.js';
 import { sleep } from '../utils/helpers.js';
 import { appendLog } from '../utils/logger.js';
+import { findBestUnitMatch } from '../utils/unitMatch.js';
 
 export const selectTreeItem = async (linkSelector, wrapSelector, targetName) => {
     if (!targetName || !targetName.trim()) return false;
@@ -92,14 +93,6 @@ export const selectTreeItem = async (linkSelector, wrapSelector, targetName) => 
         return raw.replace(/\s+/g, ' ').trim();
     };
 
-    // Chuan hoa ve chu thuong truoc khi so sanh: gia tri AI backend tra ve co
-    // the khac hoa/thuong so voi ten that hien tren he thong (vd AI tra "Phong
-    // kinh te" chu thuong, trong khi DOM hien "Phong Kinh te - Xa Vinh Thanh -
-    // Tinh Gia Lai" viet hoa chu dau tung tu) — neu so sanh phan biet hoa/
-    // thuong thi ca === lan includes() truoc day deu se khong khop duoc.
-    const normalize = (s) => (s || '').toLowerCase();
-    const targetNorm = normalize(targetName);
-
     // YEU CAU NGHIEP VU: don vi/nguoi tren he thong that thuong co them hau to
     // (ten xa/phuong, "UBND xa ...") ma AI backend khong the biet truoc va se
     // KHONG BAO GIO tra ve dung 100% nhu vay (vd AI tra "Phong kinh te" nhung
@@ -107,32 +100,13 @@ export const selectTreeItem = async (linkSelector, wrapSelector, targetName) => 
     // chi chon KHONG con bat buoc khop 100% (exact) nhu code cu nua.
     const candidateLabels = candidates.map(el => ({ el, label: displayTextOf(el) }));
 
-    // Chon ung vien co ten NGAN NHAT trong 1 danh sach da loc san — dung
-    // chung cho ca 2 buoc ben duoi de uu tien khop CHINH XAC/gan dung nhat
-    // khi co nhieu ung vien cung thoa dieu kien.
-    const shortest = (list) => list.reduce((b, c) => (!b || c.label.length < b.label.length) ? c : b, null);
-
-    // Buoc 1 (uu tien): ten hien thi BAT DAU BANG chuoi AI tra ve — tin hieu
-    // manh hon "chua o bat ky vi tri nao". Ten cua 1 DON VI/PHONG BAN luon
-    // nam NGAY DAU chinh ten cua no (vd "Phong Kinh te - Xa Vinh Thanh - Tinh
-    // Gia Lai" bat dau bang "Phong Kinh te"), trong khi cum tu do rat hay bi
-    // LAP LAI O GIUA ten cua NHIEU nguoi/vi tri THUOC don vi ay (vd "Van thu
-    // (Van thu phong Kinh te)", "Truong phong Kinh te (Nguyen Tuan Trinh)").
-    // Neu chi xet "chua substring o bat ky dau" roi chon ung vien ngan nhat
-    // (cach cu), cac muc NGUOI/alias ngan hon nay se thang NHAM truoc ca dung
-    // nut DON VI/PHONG BAN can chon — day chinh la bug thuc te da gap: AI tra
-    // "Phong Kinh te" nhung tool lai chon vao "Van thu (Van thu phong Kinh
-    // te)" thay vi dung nut cha "Phong Kinh te - Xa Vinh Thanh - Tinh Gia Lai".
-    let best = shortest(candidateLabels.filter(c => normalize(c.label).startsWith(targetNorm)));
-
-    // Buoc 2 (fallback): khong co ung vien nao BAT DAU BANG chuoi AI tra ve —
-    // vd AI chi tra ve rieng ten nguoi ("Tran Thanh Duc") trong khi DOM dang
-    // hien dang "Vai tro (Ten nguoi)" ("Chi huy truong (Tran Thanh Duc)").
-    // Luc nay moi roi ve so khop "chua substring o bat ky vi tri nao", van uu
-    // tien ung vien ngan nhat trong so cac ung vien con lai.
-    if (!best) {
-        best = shortest(candidateLabels.filter(c => normalize(c.label).includes(targetNorm)));
-    }
+    // Thuat toan khop (chuan hoa hoa/thuong, uu tien startsWith roi fallback
+    // includes, chon label ngan nhat khi co nhieu ung vien cung thoa) dat
+    // chung trong ../utils/unitMatch.js de ui/unitPicker.js dung lai Y HET cho
+    // phan goi y luc review (truoc khi bam "Duyet"), dam bao gia tri goi y va
+    // gia tri thuc su duoc chon luc fill KHONG bao gio lech nhau. Xem
+    // unitMatch.js de biet chi tiet ly do uu tien startsWith hon includes.
+    const best = findBestUnitMatch(candidateLabels, targetName);
 
     if (best) {
         tryClick(best.el);
