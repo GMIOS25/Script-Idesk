@@ -123,7 +123,7 @@ const openPicker = ({ id, kind, anchor }) => {
     closePopover();
 
     if (unitCache.size === 0) {
-        alert('Chưa có dữ liệu đơn vị. Hãy bấm "Gửi AI" ít nhất 1 lần để hệ thống tự lấy danh sách đơn vị trước.');
+        alert('Chưa có dữ liệu đơn vị. Hãy bấm "Bắt đầu" ít nhất 1 lần để hệ thống tự lấy danh sách đơn vị trước.');
         return;
     }
 

@@ -1,5 +1,5 @@
 export const CSS_STYLES = `
-    /* ===== iDesk RPA Minimalist Light UI v3.0 ===== */
+    /* ===== Nhận và chuyển văn bản trên trục công văn Minimalist Light UI v3.0 ===== */
     #idesk-rpa-hub {
         position: fixed !important;
         bottom: 20px !important;

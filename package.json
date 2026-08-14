@@ -1,7 +1,7 @@
 {
   "name": "script-idesk",
   "version": "3.0.0",
-  "description": "iDesk RPA Auto-Fill UserScript",
+  "description": "Nhận và chuyển văn bản trên trục công văn Auto-Fill UserScript",
   "type": "module",
   "scripts": {
     "build": "node build.mjs",

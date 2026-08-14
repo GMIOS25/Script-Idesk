@@ -1,5 +1,5 @@
 """
-Mock Backend cho iDesk RPA Automation (DocFlow API v3.1)
+Mock Backend cho Nhận và chuyển văn bản trên trục công văn Automation (DocFlow API v3.1)
 Mo phong AI xu ly van ban den theo tai lieu docs/en/docflow.md va
 docs/en/METADATA_SCHEMA.md (NGUON SU THAT DUY NHAT ve schema).
 

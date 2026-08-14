@@ -6,7 +6,7 @@
 // Muốn giao tiếp 2 chiều thì dùng on()/emit() ở đây.
 //
 // Các event đang dùng trong dự án (cập nhật danh sách này khi thêm event mới):
-//   - 'scan-requested'        : UI báo người dùng bấm nút "Gửi AI"
+//   - 'scan-requested'        : UI báo người dùng bấm nút "Bắt đầu"
 //   - 'fill-requested'        : UI báo người dùng bấm nút "Duyệt"
 //   - 'docs-changed'          : Logic báo docCache vừa thay đổi, UI cần render lại danh sách
 //   - 'progress'              : Logic báo tiến độ xử lý { current, total }, UI cập nhật progress bar
